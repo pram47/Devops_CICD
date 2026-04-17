@@ -2,6 +2,7 @@ import { Body, Controller, Get, Headers, Param, Patch, Query } from '@nestjs/com
 import { ApiBody, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { SearchApplyMonitorDto } from './dto/search-apply-monitor.dto';
 import { StarApplyDto } from './dto/star-apply.dto';
+import { UpdateApplyStatusDto } from './dto/update-apply-status.dto';
 import { ApplyMonitorService } from './apply-monitor.service';
 
 @ApiTags('apply-monitor')
@@ -182,6 +183,19 @@ export class ApplyMonitorController {
     @Headers('authorization') authorization?: string,
   ) {
     return this.applyMonitorService.starApply(id, body.is_star, authorization);
+  }
+
+  @Patch('apply/:id/status')
+  @ApiOperation({ summary: 'Update apply status by id' })
+  @ApiParam({ name: 'id', description: 'Apply id' })
+  @ApiBody({ type: UpdateApplyStatusDto })
+  @ApiResponse({ status: 200, description: 'Updated apply status' })
+  updateApplyStatus(
+    @Param('id') id: string,
+    @Body() body: UpdateApplyStatusDto,
+    @Headers('authorization') authorization?: string,
+  ) {
+    return this.applyMonitorService.updateApplyStatus(id, body.status, authorization);
   }
 
   @Get('search/job')

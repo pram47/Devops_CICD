@@ -552,6 +552,30 @@ export class ApplyMonitorService {
     };
   }
 
+  async updateApplyStatus(id: string, status: number, authorization?: string) {
+    const [updated, applyStatuses] = await Promise.all([
+      this.patchJson<UpstreamApplyDetail>(
+        `/apply/${encodeURIComponent(id)}`,
+        { status },
+        authorization,
+      ),
+      this.fetchJson<UpstreamReferenceStatus[]>('/reference/apply-status', authorization),
+    ]);
+
+    return {
+      id: updated.id,
+      status: updated.status,
+      status_name: this.toApplyStatusName(updated.status, applyStatuses),
+      created_at: updated.created_at,
+      user_name: this.toUserName(updated),
+      job_id: updated.job_id,
+      job_name: updated.job?.name ?? '',
+      match_skill: updated.match_skill ?? 0,
+      is_viewed: updated.is_viewed,
+      is_star: updated.is_star,
+    };
+  }
+
   async searchApply(query: SearchApplyMonitorDto, authorization?: string) {
     const page = query.page ?? 0;
     const limit = query.limit ?? 6;
