@@ -3,16 +3,6 @@ import { Type } from 'class-transformer';
 import { IsBoolean, IsInt, IsOptional, IsString, Min } from 'class-validator';
 
 export class SearchApplyMonitorDto {
-  @ApiPropertyOptional({ description: 'Search apply by candidate name' })
-  @IsOptional()
-  @IsString()
-  applyName?: string;
-
-  @ApiPropertyOptional({ description: 'Filter by apply status' })
-  @IsOptional()
-  @IsString()
-  applyStatus?: string;
-
   @ApiPropertyOptional({ description: 'Filter by apply status id', example: 2 })
   @IsOptional()
   @Type(() => Number)
@@ -25,25 +15,14 @@ export class SearchApplyMonitorDto {
   @IsString()
   search?: string;
 
-  @ApiPropertyOptional({ description: 'Filter by job status' })
+  @ApiPropertyOptional({
+    description:
+      'Filter by skill ids as JSON array string, e.g. ["skill-id-1","skill-id-2"]',
+    example: '["skill-id-1","skill-id-2"]',
+  })
   @IsOptional()
   @IsString()
-  jobStatus?: string;
-
-  @ApiPropertyOptional({ description: 'Filter by work type' })
-  @IsOptional()
-  @IsString()
-  workType?: string;
-
-  @ApiPropertyOptional({ description: 'Search job by job name' })
-  @IsOptional()
-  @IsString()
-  jobName?: string;
-
-  @ApiPropertyOptional({ description: 'Filter by skill' })
-  @IsOptional()
-  @IsString()
-  skill?: string;
+  skillIds?: string;
 
   @ApiPropertyOptional({ description: 'User skill match more than this value', example: 1 })
   @IsOptional()
@@ -86,10 +65,15 @@ export class SearchApplyMonitorDto {
   @IsBoolean()
   starredOnly?: boolean;
 
-  @ApiPropertyOptional({ description: 'Sort key' })
+  @ApiPropertyOptional({
+    description: 'Sort option id from GET /apply-monitor/options sortBy',
+    example: 1,
+  })
   @IsOptional()
-  @IsString()
-  sortBy?: string;
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  sortById?: number;
 
   @ApiPropertyOptional({ default: 0 })
   @IsOptional()

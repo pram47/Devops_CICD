@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SearchApplyMonitorDto } from './dto/search-apply-monitor.dto';
 
@@ -6,12 +6,14 @@ type UpstreamApplySummary = {
   id: string;
   status: number;
   created_at: string | null;
+  company_id?: string | null;
 };
 
 type UpstreamApplyDetail = {
   id: string;
   status: number;
   created_at: string | null;
+  company_id?: string | null;
   job_id: string;
   resume_id?: string | null;
   match_skill: number | null;
@@ -57,6 +59,7 @@ type UpstreamResumeDetail = Record<string, unknown> & {
 
 type UpstreamJobSummary = {
   id: string;
+  company_id?: string | null;
   name: string | null;
   status: number;
   start_apply: string | null;
@@ -65,8 +68,17 @@ type UpstreamJobSummary = {
 
 type UpstreamJobDetail = Record<string, unknown> & {
   id?: string;
+  company_id?: string | null;
   name?: string | null;
   status?: number;
+};
+
+type UpstreamCompanyEmployee = {
+  id: string;
+  user_id?: string | null;
+  company_id: string;
+  email?: string | null;
+  role: number;
 };
 
 type UpstreamReferenceStatus = {
@@ -85,17 +97,28 @@ type StatusName = {
   en: string;
 };
 
+type OptionItem = {
+  id: number;
+  text_th: string | null;
+  text_eng: string | null;
+};
+
+type SortByItem = {
+  id: number;
+  text_th: string;
+  text_eng: string;
+};
+
 type ApplyWithResumeRow = {
   apply: UpstreamApplyDetail;
   resumeDetail: UpstreamResumeDetail | null;
 };
 
-const APPLY_STATUS_ID = {
-  APPLIED: 1,
-  APPLY: 2,
-  INTERVIEW: 3,
-  REJECT: 4,
-  ACCEPT: 5,
+const SORT_BY = {
+  NEWEST: 1,
+  OLDEST: 2,
+  SKILL_MATCH: 3,
+  MOST_APPLIED: 4,
 } as const;
 
 @Injectable()
@@ -120,26 +143,20 @@ export class ApplyMonitorService {
     return url.replace(/\/+$/, '');
   }
 
-  private async fetchJson<T>(path: string, authorization?: string): Promise<T> {
+  private async fetchJson<T>(path: string): Promise<T> {
     return this.fetchJsonFromBase<T>(
       this.postgresBaseUrl(),
       '@jobby-db-postgres',
       path,
-      authorization,
     );
   }
 
-  private async patchJson<T>(
-    path: string,
-    body: Record<string, unknown>,
-    authorization?: string,
-  ): Promise<T> {
+  private async patchJson<T>(path: string, body: Record<string, unknown>): Promise<T> {
     return this.patchJsonFromBase<T>(
       this.postgresBaseUrl(),
       '@jobby-db-postgres',
       path,
       body,
-      authorization,
     );
   }
 
@@ -147,14 +164,9 @@ export class ApplyMonitorService {
     baseUrl: string,
     upstreamName: string,
     path: string,
-    authorization?: string,
   ): Promise<T> {
     const url = `${baseUrl}${path}`;
-    const res = await fetch(url, {
-      headers: {
-        ...(authorization ? { authorization } : {}),
-      },
-    });
+    const res = await fetch(url);
 
     if (!res.ok) {
       const body = await res.text().catch(() => '');
@@ -169,14 +181,12 @@ export class ApplyMonitorService {
     upstreamName: string,
     path: string,
     body: Record<string, unknown>,
-    authorization?: string,
   ): Promise<T> {
     const url = `${baseUrl}${path}`;
     const res = await fetch(url, {
       method: 'PATCH',
       headers: {
         'content-type': 'application/json',
-        ...(authorization ? { authorization } : {}),
       },
       body: JSON.stringify(body),
     });
@@ -187,6 +197,30 @@ export class ApplyMonitorService {
     }
 
     return (await res.json()) as T;
+  }
+
+  private hasCompanyAccess(
+    assignedCompanyIds: Set<string>,
+    companyId: string | null | undefined,
+  ): boolean {
+    return typeof companyId === 'string' && companyId.length > 0 && assignedCompanyIds.has(companyId);
+  }
+
+  private async resolveAssignedCompanyIds(authUserId: string): Promise<Set<string>> {
+    const userId = authUserId.trim();
+    if (!userId) {
+      return new Set<string>();
+    }
+
+    const rows = await this.fetchJson<UpstreamCompanyEmployee[]>(
+      `/company/employee/${encodeURIComponent(userId)}`,
+    );
+
+    return new Set(
+      rows
+        .map((row) => row.company_id)
+        .filter((companyId): companyId is string => typeof companyId === 'string' && companyId.length > 0),
+    );
   }
 
   private toUserName(detail: UpstreamApplyDetail): string {
@@ -225,23 +259,27 @@ export class ApplyMonitorService {
     };
   }
 
-  private async getApplyDetailsWithStatuses(authorization?: string) {
+  private async getApplyDetailsWithStatuses(assignedCompanyIds: Set<string>) {
     const [applySummaries, applyStatuses] = await Promise.all([
-      this.fetchJson<UpstreamApplySummary[]>('/apply', authorization),
-      this.fetchJson<UpstreamReferenceStatus[]>('/reference/apply-status', authorization),
+      this.fetchJson<UpstreamApplySummary[]>('/apply'),
+      this.fetchJson<UpstreamReferenceStatus[]>('/reference/apply-status'),
     ]);
 
+    const companyScopedSummaries = applySummaries.filter((item) =>
+      this.hasCompanyAccess(assignedCompanyIds, item.company_id),
+    );
+
     const applyDetails = await Promise.all(
-      applySummaries.map((item) =>
-        this.fetchJson<UpstreamApplyDetail>(`/apply/${encodeURIComponent(item.id)}`, authorization),
+      companyScopedSummaries.map((item) =>
+        this.fetchJson<UpstreamApplyDetail>(`/apply/${encodeURIComponent(item.id)}`),
       ),
     );
 
     return { applyDetails, applyStatuses };
   }
 
-  private async getApplyRowsWithResumeAndStatuses(authorization?: string) {
-    const { applyDetails, applyStatuses } = await this.getApplyDetailsWithStatuses(authorization);
+  private async getApplyRowsWithResumeAndStatuses(assignedCompanyIds: Set<string>) {
+    const { applyDetails, applyStatuses } = await this.getApplyDetailsWithStatuses(assignedCompanyIds);
     const resumeIds = Array.from(
       new Set(
         applyDetails
@@ -254,7 +292,6 @@ export class ApplyMonitorService {
       resumeIds.map(async (resumeId) => {
         const resume = await this.fetchJson<UpstreamResumeDetail>(
           `/resume/${encodeURIComponent(resumeId)}`,
-          authorization,
         );
         return [resumeId, resume] as const;
       }),
@@ -291,12 +328,87 @@ export class ApplyMonitorService {
     };
   }
 
+  private parseDateMs(value: string | null | undefined): number {
+    if (!value) return 0;
+    const ms = new Date(value).getTime();
+    return Number.isNaN(ms) ? 0 : ms;
+  }
+
+  private applySortForApplies(items: UpstreamApplyDetail[], sortById: number | undefined) {
+    const sortId = sortById ?? SORT_BY.NEWEST;
+    if (sortId === SORT_BY.OLDEST) {
+      items.sort((a, b) => this.parseDateMs(a.created_at) - this.parseDateMs(b.created_at));
+      return;
+    }
+
+    if (sortId === SORT_BY.SKILL_MATCH) {
+      items.sort((a, b) => (b.match_skill ?? 0) - (a.match_skill ?? 0));
+      return;
+    }
+
+    // default newest
+    items.sort((a, b) => this.parseDateMs(b.created_at) - this.parseDateMs(a.created_at));
+  }
+
   private getSearchText(query: SearchApplyMonitorDto): string {
-    return (query.search ?? query.applyName ?? '').trim().toLowerCase();
+    return (query.search ?? '').trim().toLowerCase();
   }
 
   private countArray(value: unknown): number {
     return Array.isArray(value) ? value.length : 0;
+  }
+
+  private parseSkillFilter(query: SearchApplyMonitorDto): string[] {
+    const raw = (query.skillIds ?? '').trim();
+    if (!raw) {
+      return [];
+    }
+
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (!Array.isArray(parsed)) {
+        return [];
+      }
+      return parsed
+        .map((item) => (typeof item === 'string' || typeof item === 'number' ? String(item) : ''))
+        .map((item) => item.trim())
+        .filter((item) => item.length > 0);
+    } catch {
+      // Backward-compatible fallback for comma-separated query style.
+      return raw
+        .split(',')
+        .map((item) => item.trim())
+        .filter((item) => item.length > 0);
+    }
+  }
+
+  private extractSkillIdsFromResume(resumeDetail: UpstreamResumeDetail | null): Set<string> {
+    const skills = resumeDetail?.skills;
+    if (!Array.isArray(skills)) {
+      return new Set<string>();
+    }
+
+    const ids = skills
+      .map((skill) => {
+        if (!skill || typeof skill !== 'object') {
+          return '';
+        }
+
+        const record = skill as Record<string, unknown>;
+        const candidate =
+          record.skill_id ??
+          record.id ??
+          record.eid ??
+          record.skill_element_id ??
+          record.skillElementId;
+
+        return typeof candidate === 'string' || typeof candidate === 'number'
+          ? String(candidate).trim()
+          : '';
+      })
+      .filter((id) => id.length > 0);
+
+    return new Set(ids);
   }
 
   private calculateYearExperience(resumeDetail: UpstreamResumeDetail | null): number {
@@ -326,16 +438,19 @@ export class ApplyMonitorService {
     item: UpstreamApplyDetail,
     resumeDetail: UpstreamResumeDetail | null,
     query: SearchApplyMonitorDto,
-    applyStatuses: UpstreamReferenceStatus[],
   ): boolean {
+    const requestedSkillIds = this.parseSkillFilter(query);
     const searchText = this.getSearchText(query);
     const bySearch = !searchText || this.toUserName(item).toLowerCase().includes(searchText);
 
-    const statusName = this.toApplyStatusName(item.status, applyStatuses).en.toLowerCase();
     const byStatusId = query.applyStatusId === undefined || item.status === query.applyStatusId;
-    const byStatusName = !query.applyStatus || statusName === query.applyStatus.toLowerCase();
 
     const byStar = query.starredOnly !== true || item.is_star;
+
+    const resumeSkillIds = this.extractSkillIdsFromResume(resumeDetail);
+    const bySkill =
+      requestedSkillIds.length === 0 ||
+      requestedSkillIds.some((requestedId) => resumeSkillIds.has(requestedId));
 
     const userSkillCount = this.countArray(resumeDetail?.skills);
     const experienceCount = this.countArray(resumeDetail?.work_experiences);
@@ -356,8 +471,8 @@ export class ApplyMonitorService {
     return (
       bySearch &&
       byStatusId &&
-      byStatusName &&
       byStar &&
+      bySkill &&
       byUserSkill &&
       byExperience &&
       byAchievement &&
@@ -366,52 +481,33 @@ export class ApplyMonitorService {
     );
   }
 
-  async getApplySearchOptions(authorization?: string) {
-    const [applyStatuses, jobStatuses, workTypes] = await Promise.all([
-      this.fetchJson<UpstreamReferenceStatus[]>('/reference/apply-status', authorization),
-      this.fetchJson<UpstreamReferenceStatus[]>('/reference/job-status', authorization),
-      this.fetchJson<UpstreamReferenceStatus[]>('/reference/work-types', authorization),
+  private toOptionItem(item: UpstreamReferenceStatus): OptionItem {
+    return {
+      id: item.id,
+      text_th: item.text_th ?? null,
+      text_eng: item.text_eng ?? null,
+    };
+  }
+
+  async getOptions(_authUserId: string) {
+    const [applyStatuses] = await Promise.all([
+      this.fetchJson<UpstreamReferenceStatus[]>('/reference/apply-status'),
     ]);
 
+    const sortBy: SortByItem[] = [
+      { id: SORT_BY.NEWEST, text_th: 'ใหม่สุด', text_eng: 'newest' },
+      { id: SORT_BY.OLDEST, text_th: 'เก่าสุด', text_eng: 'oldest' },
+      { id: SORT_BY.SKILL_MATCH, text_th: 'ตรงทักษะมากสุด', text_eng: 'skill_match' },
+      { id: SORT_BY.MOST_APPLIED, text_th: 'ผู้สมัครเยอะสุด', text_eng: 'most_applied' },
+    ];
+
     return {
-      applyStatus: applyStatuses
-        .map((item) => item.text_eng)
-        .filter((item): item is string => !!item),
-      jobStatus: jobStatuses.map((item) => item.text_eng).filter((item): item is string => !!item),
-      workType: workTypes.map((item) => item.text_eng).filter((item): item is string => !!item),
-      sortBy: ['newest', 'oldest', 'skill_match'],
+      applyStatus: applyStatuses.map((item) => this.toOptionItem(item)),
+      sortBy,
     };
   }
 
-  async getApplyStatusList(authorization?: string) {
-    const applyStatuses = await this.fetchJson<UpstreamReferenceStatus[]>(
-      '/reference/apply-status',
-      authorization,
-    );
-
-    return {
-      data: applyStatuses.map((item) => ({
-        id: item.id,
-        text_th: item.text_th,
-        text_eng: item.text_eng,
-      })),
-    };
-  }
-
-  async getJobSearchOptions(authorization?: string) {
-    const [jobStatuses, workTypes] = await Promise.all([
-      this.fetchJson<UpstreamReferenceStatus[]>('/reference/job-status', authorization),
-      this.fetchJson<UpstreamReferenceStatus[]>('/reference/work-types', authorization),
-    ]);
-
-    return {
-      jobStatus: jobStatuses.map((item) => item.text_eng).filter((item): item is string => !!item),
-      workType: workTypes.map((item) => item.text_eng).filter((item): item is string => !!item),
-      sortBy: ['newest', 'oldest', 'most_applied'],
-    };
-  }
-
-  async searchJobSkillOptions(searchName: string, authorization?: string) {
+  async searchJobSkillOptions(_authUserId: string, searchName: string) {
     const query = searchName.trim();
     if (!query) {
       return { skills: [] };
@@ -422,7 +518,6 @@ export class ApplyMonitorService {
       this.neo4jBaseUrl(),
       '@jobby-db-neo4j',
       `/graph/element-id/lookup/skills/search/${encodedSearch}`,
-      authorization,
     );
 
     return {
@@ -433,17 +528,21 @@ export class ApplyMonitorService {
     };
   }
 
-  async getApplyDetail(id: string, authorization?: string) {
+  async getApplyDetail(authUserId: string, id: string) {
+    const assignedCompanyIds = await this.resolveAssignedCompanyIds(authUserId);
     const [detail, applyStatuses] = await Promise.all([
-      this.fetchJson<UpstreamApplyDetail>(`/apply/${encodeURIComponent(id)}`, authorization),
-      this.fetchJson<UpstreamReferenceStatus[]>('/reference/apply-status', authorization),
+      this.fetchJson<UpstreamApplyDetail>(`/apply/${encodeURIComponent(id)}`),
+      this.fetchJson<UpstreamReferenceStatus[]>('/reference/apply-status'),
     ]);
+
+    if (!this.hasCompanyAccess(assignedCompanyIds, detail.company_id)) {
+      throw new ForbiddenException('No permission to access this apply');
+    }
 
     const resumeDetail =
       detail.resume_id != null
         ? await this.fetchJson<UpstreamResumeDetail>(
             `/resume/${encodeURIComponent(detail.resume_id)}`,
-            authorization,
           )
         : (detail.resume ?? null);
 
@@ -464,11 +563,16 @@ export class ApplyMonitorService {
     };
   }
 
-  async getJobDetail(jobId: string, authorization?: string) {
+  async getJobDetail(authUserId: string, jobId: string) {
+    const assignedCompanyIds = await this.resolveAssignedCompanyIds(authUserId);
     const [jobDetail, jobStatuses] = await Promise.all([
-      this.fetchJson<UpstreamJobDetail>(`/job/${encodeURIComponent(jobId)}`, authorization),
-      this.fetchJson<UpstreamReferenceStatus[]>('/reference/job-status', authorization),
+      this.fetchJson<UpstreamJobDetail>(`/job/${encodeURIComponent(jobId)}`),
+      this.fetchJson<UpstreamReferenceStatus[]>('/reference/job-status'),
     ]);
+
+    if (!this.hasCompanyAccess(assignedCompanyIds, jobDetail.company_id)) {
+      throw new ForbiddenException('No permission to access this job');
+    }
 
     const status = typeof jobDetail.status === 'number' ? jobDetail.status : 0;
 
@@ -478,64 +582,37 @@ export class ApplyMonitorService {
     };
   }
 
-  async getApplyByJobId(jobId: string, query: SearchApplyMonitorDto, authorization?: string) {
+  async getApplyByJobId(authUserId: string, jobId: string, query: SearchApplyMonitorDto) {
     const page = query.page ?? 0;
     const limit = query.limit ?? 6;
-    const { rows, applyStatuses } = await this.getApplyRowsWithResumeAndStatuses(authorization);
+    const assignedCompanyIds = await this.resolveAssignedCompanyIds(authUserId);
+    const { rows, applyStatuses } = await this.getApplyRowsWithResumeAndStatuses(assignedCompanyIds);
 
     const filtered = rows
       .filter(
         (row) =>
           row.apply.job_id === jobId &&
-          this.matchesApplyFilters(row.apply, row.resumeDetail, query, applyStatuses),
+          this.matchesApplyFilters(row.apply, row.resumeDetail, query),
       )
       .map((row) => row.apply);
 
+    this.applySortForApplies(filtered, query.sortById);
     return this.buildPaginatedApplyResponse(filtered, applyStatuses, page, limit);
   }
 
-  async getNewAppliedByJobId(jobId: string, query: SearchApplyMonitorDto, authorization?: string) {
-    const page = query.page ?? 0;
-    const limit = query.limit ?? 6;
-    const { rows, applyStatuses } = await this.getApplyRowsWithResumeAndStatuses(authorization);
+  async starApply(authUserId: string, id: string, isStar: boolean) {
+    const assignedCompanyIds = await this.resolveAssignedCompanyIds(authUserId);
+    const current = await this.fetchJson<UpstreamApplyDetail>(`/apply/${encodeURIComponent(id)}`);
+    if (!this.hasCompanyAccess(assignedCompanyIds, current.company_id)) {
+      throw new ForbiddenException('No permission to update this apply');
+    }
 
-    const filtered = rows
-      .filter(
-        (row) =>
-          row.apply.job_id === jobId &&
-          row.apply.status === APPLY_STATUS_ID.APPLY &&
-          !row.apply.is_viewed &&
-          this.matchesApplyFilters(row.apply, row.resumeDetail, query, applyStatuses),
-      )
-      .map((row) => row.apply);
-
-    return this.buildPaginatedApplyResponse(filtered, applyStatuses, page, limit);
-  }
-
-  async getAppliedByJobId(jobId: string, query: SearchApplyMonitorDto, authorization?: string) {
-    return this.getApplyByJobStatus(jobId, APPLY_STATUS_ID.APPLIED, query, authorization);
-  }
-
-  async getInterviewByJobId(jobId: string, query: SearchApplyMonitorDto, authorization?: string) {
-    return this.getApplyByJobStatus(jobId, APPLY_STATUS_ID.INTERVIEW, query, authorization);
-  }
-
-  async getAcceptByJobId(jobId: string, query: SearchApplyMonitorDto, authorization?: string) {
-    return this.getApplyByJobStatus(jobId, APPLY_STATUS_ID.ACCEPT, query, authorization);
-  }
-
-  async getRejectByJobId(jobId: string, query: SearchApplyMonitorDto, authorization?: string) {
-    return this.getApplyByJobStatus(jobId, APPLY_STATUS_ID.REJECT, query, authorization);
-  }
-
-  async starApply(id: string, isStar: boolean, authorization?: string) {
     const [updated, applyStatuses] = await Promise.all([
       this.patchJson<UpstreamApplyDetail>(
         `/apply/${encodeURIComponent(id)}`,
         { is_star: isStar },
-        authorization,
       ),
-      this.fetchJson<UpstreamReferenceStatus[]>('/reference/apply-status', authorization),
+      this.fetchJson<UpstreamReferenceStatus[]>('/reference/apply-status'),
     ]);
 
     return {
@@ -552,14 +629,19 @@ export class ApplyMonitorService {
     };
   }
 
-  async updateApplyStatus(id: string, status: number, authorization?: string) {
+  async updateApplyStatus(authUserId: string, id: string, status: number) {
+    const assignedCompanyIds = await this.resolveAssignedCompanyIds(authUserId);
+    const current = await this.fetchJson<UpstreamApplyDetail>(`/apply/${encodeURIComponent(id)}`);
+    if (!this.hasCompanyAccess(assignedCompanyIds, current.company_id)) {
+      throw new ForbiddenException('No permission to update this apply');
+    }
+
     const [updated, applyStatuses] = await Promise.all([
       this.patchJson<UpstreamApplyDetail>(
         `/apply/${encodeURIComponent(id)}`,
         { status },
-        authorization,
       ),
-      this.fetchJson<UpstreamReferenceStatus[]>('/reference/apply-status', authorization),
+      this.fetchJson<UpstreamReferenceStatus[]>('/reference/apply-status'),
     ]);
 
     return {
@@ -576,55 +658,73 @@ export class ApplyMonitorService {
     };
   }
 
-  async searchApply(query: SearchApplyMonitorDto, authorization?: string) {
+  async updateApplyViewed(authUserId: string, id: string, isViewed: boolean) {
+    const assignedCompanyIds = await this.resolveAssignedCompanyIds(authUserId);
+    const current = await this.fetchJson<UpstreamApplyDetail>(`/apply/${encodeURIComponent(id)}`);
+    if (!this.hasCompanyAccess(assignedCompanyIds, current.company_id)) {
+      throw new ForbiddenException('No permission to update this apply');
+    }
+
+    const [updated, applyStatuses] = await Promise.all([
+      this.patchJson<UpstreamApplyDetail>(
+        `/apply/${encodeURIComponent(id)}`,
+        { is_viewed: isViewed },
+      ),
+      this.fetchJson<UpstreamReferenceStatus[]>('/reference/apply-status'),
+    ]);
+
+    return {
+      id: updated.id,
+      status: updated.status,
+      status_name: this.toApplyStatusName(updated.status, applyStatuses),
+      created_at: updated.created_at,
+      user_name: this.toUserName(updated),
+      job_id: updated.job_id,
+      job_name: updated.job?.name ?? '',
+      match_skill: updated.match_skill ?? 0,
+      is_viewed: updated.is_viewed,
+      is_star: updated.is_star,
+    };
+  }
+
+  async searchApply(authUserId: string, query: SearchApplyMonitorDto) {
     const page = query.page ?? 0;
     const limit = query.limit ?? 6;
-    const { applyDetails, applyStatuses } = await this.getApplyDetailsWithStatuses(authorization);
+    const assignedCompanyIds = await this.resolveAssignedCompanyIds(authUserId);
+    const { rows, applyStatuses } = await this.getApplyRowsWithResumeAndStatuses(assignedCompanyIds);
+    const filtered = rows
+      .filter((row) => this.matchesApplyFilters(row.apply, row.resumeDetail, query))
+      .map((row) => row.apply);
 
-    const filtered = applyDetails.filter((item) => {
-      const statusName = this.toApplyStatusName(item.status, applyStatuses);
-      const byApplyName =
-        !query.applyName ||
-        this.toUserName(item).toLowerCase().includes(query.applyName.toLowerCase());
-      const byApplyStatus =
-        !query.applyStatus || statusName.en.toLowerCase() === query.applyStatus.toLowerCase();
-      const byJobName =
-        !query.jobName ||
-        (item.job?.name ?? '').toLowerCase().includes(query.jobName.toLowerCase());
-      return byApplyName && byApplyStatus && byJobName;
-    });
-
+    this.applySortForApplies(filtered, query.sortById);
     return this.buildPaginatedApplyResponse(filtered, applyStatuses, page, limit);
   }
 
-  async searchJob(query: SearchApplyMonitorDto, authorization?: string) {
+  async searchJob(authUserId: string, query: SearchApplyMonitorDto) {
     const page = query.page ?? 0;
     const limit = query.limit ?? 6;
+    const assignedCompanyIds = await this.resolveAssignedCompanyIds(authUserId);
 
     const [jobs, applySummaries, jobStatuses] = await Promise.all([
-      this.fetchJson<UpstreamJobSummary[]>('/job', authorization),
-      this.fetchJson<UpstreamApplySummary[]>('/apply', authorization),
-      this.fetchJson<UpstreamReferenceStatus[]>('/reference/job-status', authorization),
+      this.fetchJson<UpstreamJobSummary[]>('/job'),
+      this.fetchJson<UpstreamApplySummary[]>('/apply'),
+      this.fetchJson<UpstreamReferenceStatus[]>('/reference/job-status'),
     ]);
 
+    const scopedJobs = jobs.filter((job) => this.hasCompanyAccess(assignedCompanyIds, job.company_id));
+    const scopedApplySummaries = applySummaries.filter((item) =>
+      this.hasCompanyAccess(assignedCompanyIds, item.company_id),
+    );
+
     const applyDetails = await Promise.all(
-      applySummaries.map((item) =>
-        this.fetchJson<UpstreamApplyDetail>(`/apply/${encodeURIComponent(item.id)}`, authorization),
+      scopedApplySummaries.map((item) =>
+        this.fetchJson<UpstreamApplyDetail>(`/apply/${encodeURIComponent(item.id)}`),
       ),
     );
 
-    const filtered = jobs.filter((item) => {
-      const byJobName =
-        !query.jobName || (item.name ?? '').toLowerCase().includes(query.jobName.toLowerCase());
-      const byJobStatus =
-        !query.jobStatus ||
-        this.toJobStatusName(item.status, jobStatuses).toLowerCase() ===
-          query.jobStatus.toLowerCase();
-      return byJobName && byJobStatus;
-    });
+    const filtered = scopedJobs;
 
-    const start = page * limit;
-    const items = filtered.slice(start, start + limit).map((job) => {
+    const jobCards = filtered.map((job) => {
       const relatedApplies = applyDetails.filter((apply) => apply.job_id === job.id);
       const newAppliedCount = relatedApplies.filter((apply) => !apply.is_viewed).length;
 
@@ -635,8 +735,21 @@ export class ApplyMonitorService {
         date_range: [job.start_apply, job.end_apply].filter(Boolean).join(' - '),
         applied_count: relatedApplies.length,
         new_applied_count: newAppliedCount,
+        _created_at: job.start_apply ?? job.end_apply ?? null,
       };
     });
+
+    const sortId = query.sortById ?? SORT_BY.NEWEST;
+    if (sortId === SORT_BY.OLDEST) {
+      jobCards.sort((a, b) => this.parseDateMs(a._created_at) - this.parseDateMs(b._created_at));
+    } else if (sortId === SORT_BY.MOST_APPLIED) {
+      jobCards.sort((a, b) => b.applied_count - a.applied_count);
+    } else {
+      jobCards.sort((a, b) => this.parseDateMs(b._created_at) - this.parseDateMs(a._created_at));
+    }
+
+    const start = page * limit;
+    const items = jobCards.slice(start, start + limit).map(({ _created_at, ...rest }) => rest);
 
     return {
       section: 'job',
@@ -647,25 +760,4 @@ export class ApplyMonitorService {
     };
   }
 
-  private async getApplyByJobStatus(
-    jobId: string,
-    statusId: number,
-    query: SearchApplyMonitorDto,
-    authorization?: string,
-  ) {
-    const page = query.page ?? 0;
-    const limit = query.limit ?? 6;
-    const { rows, applyStatuses } = await this.getApplyRowsWithResumeAndStatuses(authorization);
-
-    const filtered = rows
-      .filter(
-        (row) =>
-          row.apply.job_id === jobId &&
-          row.apply.status === statusId &&
-          this.matchesApplyFilters(row.apply, row.resumeDetail, query, applyStatuses),
-      )
-      .map((row) => row.apply);
-
-    return this.buildPaginatedApplyResponse(filtered, applyStatuses, page, limit);
-  }
 }
