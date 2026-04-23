@@ -144,6 +144,12 @@ export class SessionUserMatchGuard implements CanActivate {
         context.getHandler(),
         context.getClass(),
       ]) ?? defaultSources;
+
+    // Allow auth-only usage by explicitly setting @UseAuthUserIdSources() with no args.
+    if (configuredSources.length === 0) {
+      return true;
+    }
+
     const claimedUserId = this.pickClaimedUserId(request, configuredSources);
 
     if (!claimedUserId) {

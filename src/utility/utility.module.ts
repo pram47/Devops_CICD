@@ -5,5 +5,6 @@ import { UtilityService } from './utility.service';
 @Module({
   controllers: [UtilityController],
   providers: [UtilityService],
+  exports: [UtilityService],
 })
 export class UtilityModule {}
