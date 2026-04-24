@@ -1,10 +1,10 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { UtilityService } from '../utility/utility.service';
+import { SearchCompanyJobDto } from './dto/search-company-job.dto';
 import { UpdateCompanyAboutDto } from './dto/update-company-about.dto';
 import { UpdateCompanyAdditionInformationDto } from './dto/update-company-addition-information.dto';
 import { UpdateCompanyInfoDto } from './dto/update-company-info.dto';
-import { UpdateCompanyMediaDto } from './dto/update-company-media.dto';
 
 type UpstreamCompanyEmployee = {
   company_id: string;
@@ -18,6 +18,24 @@ type UpstreamJobSummary = {
   created_at: string | null;
   start_apply: string | null;
   end_apply: string | null;
+};
+
+type UpstreamApplySummary = {
+  id: string;
+  job_id: string;
+  company_id?: string | null;
+};
+
+type UpstreamJobDetail = Record<string, unknown> & {
+  id?: string;
+  province?: Record<string, unknown> | null;
+  district?: Record<string, unknown> | null;
+};
+
+type UpstreamCompany = {
+  id: string;
+  logo?: string | null;
+  banner?: string | null;
 };
 
 @Injectable()
@@ -46,6 +64,20 @@ export class CompanyService {
 
     if (!res.ok) {
       const resBody = await res.text().catch(() => '');
+      if (res.status === 400) {
+        let message = resBody;
+        try {
+          const j = JSON.parse(resBody) as { message?: unknown };
+          if (typeof j.message === 'string') {
+            message = j.message;
+          } else if (Array.isArray(j.message)) {
+            message = j.message.map(String).join('; ');
+          }
+        } catch {
+          /* keep resBody */
+        }
+        throw new BadRequestException(message || 'Bad request');
+      }
       throw new Error(`Upstream @jobby-db-postgres failed ${res.status} for ${path}: ${resBody}`);
     }
 
@@ -72,6 +104,31 @@ export class CompanyService {
     }
   }
 
+  private parseStorageGoogleapisObject(
+    url: string | null | undefined,
+  ): { bucket: string; objectName: string } | undefined {
+    if (!url) return undefined;
+    try {
+      const parsed = new URL(url);
+      if (parsed.hostname !== 'storage.googleapis.com') {
+        return undefined;
+      }
+      const pathname = parsed.pathname.replace(/^\/+/, '');
+      const slashAt = pathname.indexOf('/');
+      if (slashAt <= 0) {
+        return undefined;
+      }
+      const bucket = pathname.slice(0, slashAt);
+      const objectName = decodeURIComponent(pathname.slice(slashAt + 1));
+      if (!bucket || !objectName) {
+        return undefined;
+      }
+      return { bucket, objectName };
+    } catch {
+      return undefined;
+    }
+  }
+
   async getCompany(authUserId: string, companyId: string) {
     await this.ensureCompanyAccess(authUserId, companyId);
     return this.fetchJson<Record<string, unknown>>(`/company/${encodeURIComponent(companyId)}`);
@@ -94,20 +151,59 @@ export class CompanyService {
       ...(dto.province_id !== undefined && { province_id: dto.province_id }),
       ...(dto.country_id !== undefined && { country_id: dto.country_id }),
       ...(dto.postal_code_id !== undefined && { postal_code_id: dto.postal_code_id }),
+      ...(dto.postal_code !== undefined && { postal_code: dto.postal_code }),
+      ...(dto.contacts !== undefined && { contacts: dto.contacts }),
     });
   }
 
   async updateCompanyMedia(
     authUserId: string,
     companyId: string,
-    dto: UpdateCompanyMediaDto,
-    file: Express.Multer.File | undefined,
+    files: { logo?: Express.Multer.File; banner?: Express.Multer.File },
   ) {
     await this.ensureCompanyAccess(authUserId, companyId);
-    const uploaded = await this.utilityService.uploadImage(file, `company/${companyId}`);
-    return this.patchJson<Record<string, unknown>>(`/company/${encodeURIComponent(companyId)}`, {
-      [dto.field]: uploaded.publicUrl,
-    });
+
+    const current = await this.fetchJson<UpstreamCompany>(
+      `/company/${encodeURIComponent(companyId)}`,
+    );
+    const previousLogo = this.parseStorageGoogleapisObject(current.logo);
+    const previousBanner = this.parseStorageGoogleapisObject(current.banner);
+
+    const patch: Record<string, unknown> = {};
+    if (files.logo) {
+      const uploadedLogo = await this.utilityService.uploadImage(
+        files.logo,
+        `company/${companyId}`,
+      );
+      patch.logo = uploadedLogo.publicUrl;
+    }
+    if (files.banner) {
+      const uploadedBanner = await this.utilityService.uploadImage(
+        files.banner,
+        `company/${companyId}`,
+      );
+      patch.banner = uploadedBanner.publicUrl;
+    }
+
+    if (Object.keys(patch).length === 0) {
+      // No-op: nothing to update
+      return current as unknown as Record<string, unknown>;
+    }
+
+    const updated = await this.patchJson<Record<string, unknown>>(
+      `/company/${encodeURIComponent(companyId)}`,
+      patch,
+    );
+
+    // Best-effort cleanup: remove previous objects when replaced.
+    if (files.logo && previousLogo) {
+      await this.utilityService.deleteObject(previousLogo.objectName, previousLogo.bucket);
+    }
+    if (files.banner && previousBanner) {
+      await this.utilityService.deleteObject(previousBanner.objectName, previousBanner.bucket);
+    }
+
+    return updated;
   }
 
   async updateCompanyAbout(authUserId: string, companyId: string, dto: UpdateCompanyAboutDto) {
@@ -131,9 +227,54 @@ export class CompanyService {
     });
   }
 
-  async getCompanyJobs(authUserId: string, companyId: string) {
+  async getCompanyJobs(authUserId: string, companyId: string, query: SearchCompanyJobDto) {
     await this.ensureCompanyAccess(authUserId, companyId);
-    const jobs = await this.fetchJson<UpstreamJobSummary[]>('/job');
-    return jobs.filter((job) => job.company_id === companyId);
+
+    const page = query.page ?? 0;
+    const limit = query.limit ?? 10;
+
+    const [jobs, applySummaries] = await Promise.all([
+      this.fetchJson<UpstreamJobSummary[]>('/job'),
+      this.fetchJson<UpstreamApplySummary[]>('/apply'),
+    ]);
+
+    const scopedJobs = jobs.filter((job) => job.company_id === companyId);
+    const scopedApplies = applySummaries.filter((apply) => apply.company_id === companyId);
+
+    const appliedCountByJobId = new Map<string, number>();
+    for (const apply of scopedApplies) {
+      appliedCountByJobId.set(apply.job_id, (appliedCountByJobId.get(apply.job_id) ?? 0) + 1);
+    }
+
+    const jobDetails = await Promise.all(
+      scopedJobs.map((job) =>
+        this.fetchJson<UpstreamJobDetail>(`/job/${encodeURIComponent(job.id)}`),
+      ),
+    );
+    const detailByJobId = new Map<string, UpstreamJobDetail>(
+      jobDetails
+        .map((detail) => (detail.id ? ([detail.id, detail] as const) : null))
+        .filter((row): row is readonly [string, UpstreamJobDetail] => row !== null),
+    );
+
+    const enriched = scopedJobs.map((job) => {
+      const detail = detailByJobId.get(job.id);
+      return {
+        ...job,
+        applied_count: appliedCountByJobId.get(job.id) ?? 0,
+        province: detail?.province ?? null,
+        district: detail?.district ?? null,
+      };
+    });
+
+    const start = page * limit;
+    const data = enriched.slice(start, start + limit);
+
+    return {
+      data,
+      page,
+      limit,
+      total: enriched.length,
+    };
   }
 }

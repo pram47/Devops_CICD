@@ -4,17 +4,19 @@ import {
   Get,
   Param,
   Patch,
+  Query,
   Req,
-  UploadedFile,
+  UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import {
   ApiBody,
   ApiConsumes,
   ApiOperation,
   ApiParam,
+  ApiQuery,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
@@ -24,8 +26,8 @@ import {
 } from '../auth/guards/session-user-match.guard';
 import { UpdateCompanyAboutDto } from './dto/update-company-about.dto';
 import { UpdateCompanyAdditionInformationDto } from './dto/update-company-addition-information.dto';
+import { SearchCompanyJobDto } from './dto/search-company-job.dto';
 import { UpdateCompanyInfoDto } from './dto/update-company-info.dto';
-import { UpdateCompanyMediaDto } from './dto/update-company-media.dto';
 import { CompanyService } from './company.service';
 
 type RequestWithAuthUser = {
@@ -61,28 +63,39 @@ export class CompanyController {
   }
 
   @Patch(':id/media')
-  @UseInterceptors(FileInterceptor('file'))
-  @ApiOperation({ summary: 'Upload and replace company logo or banner' })
+  @UseInterceptors(
+    FileFieldsInterceptor([
+      { name: 'logo', maxCount: 1 },
+      { name: 'banner', maxCount: 1 },
+    ]),
+  )
+  @ApiOperation({ summary: 'Upload and replace company logo and/or banner' })
   @ApiParam({ name: 'id', description: 'Company id' })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     schema: {
       type: 'object',
       properties: {
-        field: { type: 'string', enum: ['logo', 'banner'] },
-        file: { type: 'string', format: 'binary' },
+        logo: { type: 'string', format: 'binary' },
+        banner: { type: 'string', format: 'binary' },
       },
-      required: ['field', 'file'],
+      required: [],
     },
   })
   @ApiResponse({ status: 200, description: 'Updated company media' })
   updateCompanyMedia(
     @Req() req: RequestWithAuthUser,
     @Param('id') companyId: string,
-    @Body() dto: UpdateCompanyMediaDto,
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFiles()
+    files: {
+      logo?: Express.Multer.File[];
+      banner?: Express.Multer.File[];
+    },
   ) {
-    return this.companyService.updateCompanyMedia(req.auth_user_id ?? '', companyId, dto, file);
+    return this.companyService.updateCompanyMedia(req.auth_user_id ?? '', companyId, {
+      logo: files.logo?.[0],
+      banner: files.banner?.[0],
+    });
   }
 
   @Patch(':id/about')
@@ -118,8 +131,14 @@ export class CompanyController {
   @Get(':id/job')
   @ApiOperation({ summary: 'Get jobs in company' })
   @ApiParam({ name: 'id', description: 'Company id' })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiResponse({ status: 200, description: 'Company jobs' })
-  getCompanyJobs(@Req() req: RequestWithAuthUser, @Param('id') companyId: string) {
-    return this.companyService.getCompanyJobs(req.auth_user_id ?? '', companyId);
+  getCompanyJobs(
+    @Req() req: RequestWithAuthUser,
+    @Param('id') companyId: string,
+    @Query() query: SearchCompanyJobDto,
+  ) {
+    return this.companyService.getCompanyJobs(req.auth_user_id ?? '', companyId, query);
   }
 }

@@ -1,6 +1,23 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, IsString } from 'class-validator';
+import { IsArray, IsInt, IsOptional, IsString, ValidateNested } from 'class-validator';
+
+class UpdateCompanyContactItemDto {
+  @ApiPropertyOptional({ description: 'Display order; defaults to array index' })
+  @IsOptional()
+  @Type(() => Number)
+  index?: number;
+
+  @ApiPropertyOptional({ description: 'Contact label, e.g. Facebook' })
+  @IsOptional()
+  @IsString()
+  label?: string;
+
+  @ApiPropertyOptional({ description: 'Contact link, e.g. https://facebook.com/...' })
+  @IsOptional()
+  @IsString()
+  link?: string;
+}
 
 export class UpdateCompanyInfoDto {
   @ApiPropertyOptional({ description: 'Company name' })
@@ -77,4 +94,25 @@ export class UpdateCompanyInfoDto {
   @Type(() => Number)
   @IsInt()
   postal_code_id?: number;
+
+  @ApiPropertyOptional({
+    description:
+      '5-digit postal code; upstream resolves to `postal_code_id`. Send `sub_district_id` if the code is ambiguous.',
+    example: 10110,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  postal_code?: number;
+
+  @ApiPropertyOptional({
+    type: [UpdateCompanyContactItemDto],
+    description:
+      'When present, replaces all company_contact rows for this company. Omit to leave contacts unchanged.',
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => UpdateCompanyContactItemDto)
+  contacts?: UpdateCompanyContactItemDto[];
 }

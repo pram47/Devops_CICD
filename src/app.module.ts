@@ -9,6 +9,7 @@ import { HealthModule } from './health/health.module';
 import { JobModule } from './job/job.module';
 import { JobMonitorModule } from './job-monitor/job-monitor.module';
 import { ScoutModule } from './scout/scout.module';
+import { UtilityModule } from './utility/utility.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { ScoutModule } from './scout/scout.module';
     JobModule,
     JobMonitorModule,
     ScoutModule,
+    UtilityModule,
   ],
   controllers: [AppController],
   providers: [AppService],
