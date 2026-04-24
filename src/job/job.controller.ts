@@ -47,11 +47,11 @@ export class JobController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Update job in Postgres + sync Neo4j and keep eid in Postgres' })
   @ApiParam({ name: 'id', description: 'Job id (UUID)' })
-  @ApiResponse({ status: 200, description: 'Job updated successfully with synced neo4j element id' })
-  update(
-    @Param('id') id: string,
-    @Body() updateJobDto: UpdateJobDto,
-  ) {
+  @ApiResponse({
+    status: 200,
+    description: 'Job updated successfully with synced neo4j element id',
+  })
+  update(@Param('id') id: string, @Body() updateJobDto: UpdateJobDto) {
     return this.jobService.update(id, updateJobDto);
   }
 }

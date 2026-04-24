@@ -144,20 +144,11 @@ export class ApplyMonitorService {
   }
 
   private async fetchJson<T>(path: string): Promise<T> {
-    return this.fetchJsonFromBase<T>(
-      this.postgresBaseUrl(),
-      '@jobby-db-postgres',
-      path,
-    );
+    return this.fetchJsonFromBase<T>(this.postgresBaseUrl(), '@jobby-db-postgres', path);
   }
 
   private async patchJson<T>(path: string, body: Record<string, unknown>): Promise<T> {
-    return this.patchJsonFromBase<T>(
-      this.postgresBaseUrl(),
-      '@jobby-db-postgres',
-      path,
-      body,
-    );
+    return this.patchJsonFromBase<T>(this.postgresBaseUrl(), '@jobby-db-postgres', path, body);
   }
 
   private async fetchJsonFromBase<T>(
@@ -203,7 +194,9 @@ export class ApplyMonitorService {
     assignedCompanyIds: Set<string>,
     companyId: string | null | undefined,
   ): boolean {
-    return typeof companyId === 'string' && companyId.length > 0 && assignedCompanyIds.has(companyId);
+    return (
+      typeof companyId === 'string' && companyId.length > 0 && assignedCompanyIds.has(companyId)
+    );
   }
 
   private async resolveAssignedCompanyIds(authUserId: string): Promise<Set<string>> {
@@ -219,7 +212,9 @@ export class ApplyMonitorService {
     return new Set(
       rows
         .map((row) => row.company_id)
-        .filter((companyId): companyId is string => typeof companyId === 'string' && companyId.length > 0),
+        .filter(
+          (companyId): companyId is string => typeof companyId === 'string' && companyId.length > 0,
+        ),
     );
   }
 
@@ -279,7 +274,8 @@ export class ApplyMonitorService {
   }
 
   private async getApplyRowsWithResumeAndStatuses(assignedCompanyIds: Set<string>) {
-    const { applyDetails, applyStatuses } = await this.getApplyDetailsWithStatuses(assignedCompanyIds);
+    const { applyDetails, applyStatuses } =
+      await this.getApplyDetailsWithStatuses(assignedCompanyIds);
     const resumeIds = Array.from(
       new Set(
         applyDetails
@@ -586,7 +582,8 @@ export class ApplyMonitorService {
     const page = query.page ?? 0;
     const limit = query.limit ?? 6;
     const assignedCompanyIds = await this.resolveAssignedCompanyIds(authUserId);
-    const { rows, applyStatuses } = await this.getApplyRowsWithResumeAndStatuses(assignedCompanyIds);
+    const { rows, applyStatuses } =
+      await this.getApplyRowsWithResumeAndStatuses(assignedCompanyIds);
 
     const filtered = rows
       .filter(
@@ -608,10 +605,7 @@ export class ApplyMonitorService {
     }
 
     const [updated, applyStatuses] = await Promise.all([
-      this.patchJson<UpstreamApplyDetail>(
-        `/apply/${encodeURIComponent(id)}`,
-        { is_star: isStar },
-      ),
+      this.patchJson<UpstreamApplyDetail>(`/apply/${encodeURIComponent(id)}`, { is_star: isStar }),
       this.fetchJson<UpstreamReferenceStatus[]>('/reference/apply-status'),
     ]);
 
@@ -637,10 +631,7 @@ export class ApplyMonitorService {
     }
 
     const [updated, applyStatuses] = await Promise.all([
-      this.patchJson<UpstreamApplyDetail>(
-        `/apply/${encodeURIComponent(id)}`,
-        { status },
-      ),
+      this.patchJson<UpstreamApplyDetail>(`/apply/${encodeURIComponent(id)}`, { status }),
       this.fetchJson<UpstreamReferenceStatus[]>('/reference/apply-status'),
     ]);
 
@@ -666,10 +657,9 @@ export class ApplyMonitorService {
     }
 
     const [updated, applyStatuses] = await Promise.all([
-      this.patchJson<UpstreamApplyDetail>(
-        `/apply/${encodeURIComponent(id)}`,
-        { is_viewed: isViewed },
-      ),
+      this.patchJson<UpstreamApplyDetail>(`/apply/${encodeURIComponent(id)}`, {
+        is_viewed: isViewed,
+      }),
       this.fetchJson<UpstreamReferenceStatus[]>('/reference/apply-status'),
     ]);
 
@@ -691,7 +681,8 @@ export class ApplyMonitorService {
     const page = query.page ?? 0;
     const limit = query.limit ?? 6;
     const assignedCompanyIds = await this.resolveAssignedCompanyIds(authUserId);
-    const { rows, applyStatuses } = await this.getApplyRowsWithResumeAndStatuses(assignedCompanyIds);
+    const { rows, applyStatuses } =
+      await this.getApplyRowsWithResumeAndStatuses(assignedCompanyIds);
     const filtered = rows
       .filter((row) => this.matchesApplyFilters(row.apply, row.resumeDetail, query))
       .map((row) => row.apply);
@@ -711,7 +702,9 @@ export class ApplyMonitorService {
       this.fetchJson<UpstreamReferenceStatus[]>('/reference/job-status'),
     ]);
 
-    const scopedJobs = jobs.filter((job) => this.hasCompanyAccess(assignedCompanyIds, job.company_id));
+    const scopedJobs = jobs.filter((job) =>
+      this.hasCompanyAccess(assignedCompanyIds, job.company_id),
+    );
     const scopedApplySummaries = applySummaries.filter((item) =>
       this.hasCompanyAccess(assignedCompanyIds, item.company_id),
     );
@@ -759,5 +752,4 @@ export class ApplyMonitorService {
       items,
     };
   }
-
 }

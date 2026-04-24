@@ -16,8 +16,7 @@ export class SearchApplyMonitorDto {
   search?: string;
 
   @ApiPropertyOptional({
-    description:
-      'Filter by skill ids as JSON array string, e.g. ["skill-id-1","skill-id-2"]',
+    description: 'Filter by skill ids as JSON array string, e.g. ["skill-id-1","skill-id-2"]',
     example: '["skill-id-1","skill-id-2"]',
   })
   @IsOptional()

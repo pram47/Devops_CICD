@@ -122,7 +122,9 @@ export class JobService {
     }
     if (!res.ok) {
       const resBody = await res.text().catch(() => '');
-      throw new Error(`Upstream @jobby-db-postgres failed ${res.status} for /company/${trimmed}: ${resBody}`);
+      throw new Error(
+        `Upstream @jobby-db-postgres failed ${res.status} for /company/${trimmed}: ${resBody}`,
+      );
     }
 
     const company = (await res.json().catch(() => null)) as UpstreamCompany | null;
@@ -133,7 +135,9 @@ export class JobService {
 
   private async fetchPostalCodes(subDistrictCode?: number): Promise<UpstreamPostalCode[]> {
     const query =
-      subDistrictCode !== undefined ? `?sub_district_id=${encodeURIComponent(subDistrictCode)}` : '';
+      subDistrictCode !== undefined
+        ? `?sub_district_id=${encodeURIComponent(subDistrictCode)}`
+        : '';
     const res = await fetch(`${this.postgresBaseUrl()}/address/postal-codes${query}`);
     if (!res.ok) {
       const resBody = await res.text().catch(() => '');

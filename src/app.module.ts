@@ -4,8 +4,11 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ApplyMonitorModule } from './apply-monitor/apply-monitor.module';
 import { CompanyModule } from './company/company.module';
+import { EmployeeModule } from './employee/employee.module';
 import { HealthModule } from './health/health.module';
 import { JobModule } from './job/job.module';
+import { JobMonitorModule } from './job-monitor/job-monitor.module';
+import { ScoutModule } from './scout/scout.module';
 
 @Module({
   imports: [
@@ -15,8 +18,11 @@ import { JobModule } from './job/job.module';
     }),
     ApplyMonitorModule,
     CompanyModule,
+    EmployeeModule,
     HealthModule,
     JobModule,
+    JobMonitorModule,
+    ScoutModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -32,10 +32,7 @@ export class ApplyMonitorController {
   @ApiOperation({ summary: 'Search skill options for job section' })
   @ApiQuery({ name: 'searchName', required: false, description: 'Skill search text' })
   @ApiResponse({ status: 200, description: 'Skill options for job search' })
-  getJobSkillOptions(
-    @Req() req: RequestWithAuthUser,
-    @Query('searchName') searchName = '',
-  ) {
+  getJobSkillOptions(@Req() req: RequestWithAuthUser, @Query('searchName') searchName = '') {
     return this.applyMonitorService.searchJobSkillOptions(req.auth_user_id ?? '', searchName);
   }
 
@@ -52,10 +49,7 @@ export class ApplyMonitorController {
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiResponse({ status: 200, description: 'Apply section results' })
-  searchApply(
-    @Req() req: RequestWithAuthUser,
-    @Query() query: SearchApplyMonitorDto,
-  ) {
+  searchApply(@Req() req: RequestWithAuthUser, @Query() query: SearchApplyMonitorDto) {
     return this.applyMonitorService.searchApply(req.auth_user_id ?? '', query);
   }
 
@@ -103,11 +97,7 @@ export class ApplyMonitorController {
   @ApiParam({ name: 'id', description: 'Apply id' })
   @ApiBody({ type: StarApplyDto })
   @ApiResponse({ status: 200, description: 'Updated apply star status' })
-  starApply(
-    @Req() req: RequestWithAuthUser,
-    @Param('id') id: string,
-    @Body() body: StarApplyDto,
-  ) {
+  starApply(@Req() req: RequestWithAuthUser, @Param('id') id: string, @Body() body: StarApplyDto) {
     return this.applyMonitorService.starApply(req.auth_user_id ?? '', id, body.is_star);
   }
 
@@ -143,10 +133,7 @@ export class ApplyMonitorController {
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiResponse({ status: 200, description: 'Job section results' })
-  searchJob(
-    @Req() req: RequestWithAuthUser,
-    @Query() query: SearchApplyMonitorDto,
-  ) {
+  searchJob(@Req() req: RequestWithAuthUser, @Query() query: SearchApplyMonitorDto) {
     return this.applyMonitorService.searchJob(req.auth_user_id ?? '', query);
   }
 }
