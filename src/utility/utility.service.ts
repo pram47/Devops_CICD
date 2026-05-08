@@ -61,6 +61,44 @@ export class UtilityService {
     return (await res.json()) as T;
   }
 
+  private neo4jBaseUrl(): string {
+    const url = this.config.get<string>('JOBBY_DB_NEO4J_URL');
+    if (!url) {
+      throw new Error('Missing env JOBBY_DB_NEO4J_URL for jobby-employer-bff');
+    }
+    return url.replace(/\/+$/, '');
+  }
+
+  private async fetchJsonFrom<T>(baseUrl: string, upstreamName: string, path: string): Promise<T> {
+    const url = `${baseUrl}${path}`;
+    const res = await fetch(url);
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`Upstream ${upstreamName} failed ${res.status} for ${path}: ${body}`);
+    }
+    return (await res.json()) as T;
+  }
+
+  async searchSkillsFromGraph(searchName: string): Promise<Record<string, unknown>[]> {
+    const encodedSearch = encodeURIComponent(searchName ?? '');
+    if (!encodedSearch) return [];
+    return this.fetchJsonFrom<Record<string, unknown>[]>(
+      this.neo4jBaseUrl(),
+      '@jobby-db-neo4j',
+      `/graph/element-id/lookup/skills/search/${encodedSearch}`,
+    );
+  }
+
+  async getSkillDetailFromGraph(skillElementId: string): Promise<Record<string, unknown>> {
+    const encodedId = encodeURIComponent(skillElementId ?? '');
+    return this.fetchJsonFrom<Record<string, unknown>>(
+      this.neo4jBaseUrl(),
+      '@jobby-db-neo4j',
+      `/graph/element-id/skills/${encodedId}`,
+    );
+  }
+
   async getProvince(id: number, authorization?: string): Promise<UtilityProvinceResponse> {
     return this.fetchJson<UtilityProvinceResponse>(`/address/provinces/${id}`, authorization);
   }
@@ -98,6 +136,24 @@ export class UtilityService {
 
   async getPhoneRegionRef(): Promise<UtilityPhoneRegionRefItem[]> {
     return this.fetchJson<UtilityPhoneRegionRefItem[]>(`/reference/phone-region`);
+  }
+
+  async getOptionTypes(authorization?: string): Promise<{
+    work_types: Record<string, unknown>[];
+    work_options: Record<string, unknown>[];
+  }> {
+    const [workTypes, workOptions] = await Promise.all([
+      this.fetchJson<Record<string, unknown>[]>('/reference/work-types', authorization).catch(
+        () => [],
+      ),
+      this.fetchJson<Record<string, unknown>[]>('/reference/work-options', authorization).catch(
+        () => [],
+      ),
+    ]);
+    return {
+      work_types: workTypes ?? [],
+      work_options: workOptions ?? [],
+    };
   }
 
   private gcsBucketName(): string {
