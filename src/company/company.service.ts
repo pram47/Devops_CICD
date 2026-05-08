@@ -213,7 +213,9 @@ export class CompanyService {
   ) {
     await this.ensureCompanyAccess(authUserId, companyId);
 
-    const current = await this.fetchJson<UpstreamCompany>(`/company/${encodeURIComponent(companyId)}`);
+    const current = await this.fetchJson<UpstreamCompany>(
+      `/company/${encodeURIComponent(companyId)}`,
+    );
     const previousVerify = this.parseStorageGoogleapisObject(
       // company may not have this property; access safely
       (current as any).company_verify_file as string | undefined,
