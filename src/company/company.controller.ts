@@ -98,6 +98,34 @@ export class CompanyController {
     });
   }
 
+  @Patch(':id/verify-file')
+  @UseInterceptors(FileFieldsInterceptor([{ name: 'verify_file', maxCount: 1 }]))
+  @ApiOperation({ summary: 'Upload or replace company verification file' })
+  @ApiParam({ name: 'id', description: 'Company id' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        verify_file: { type: 'string', format: 'binary' },
+      },
+      required: ['verify_file'],
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Updated company verification file' })
+  updateCompanyVerifyFile(
+    @Req() req: RequestWithAuthUser,
+    @Param('id') companyId: string,
+    @UploadedFiles()
+    files: {
+      verify_file?: Express.Multer.File[];
+    },
+  ) {
+    return this.companyService.updateCompanyVerifyFile(req.auth_user_id ?? '', companyId, {
+      verify_file: files.verify_file?.[0],
+    });
+  }
+
   @Patch(':id/about')
   @ApiOperation({ summary: 'Update company about section' })
   @ApiParam({ name: 'id', description: 'Company id' })
