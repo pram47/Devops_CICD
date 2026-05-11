@@ -206,6 +206,57 @@ export class CompanyService {
     return updated;
   }
 
+  async updateCompanyVerifyFile(
+    authUserId: string,
+    companyId: string,
+    files: { verify_file?: Express.Multer.File },
+  ) {
+    await this.ensureCompanyAccess(authUserId, companyId);
+
+    const current = await this.fetchJson<UpstreamCompany>(
+      `/company/${encodeURIComponent(companyId)}`,
+    );
+    const previousVerify = this.parseStorageGoogleapisObject(
+      // company may not have this property; access safely
+      (current as any).company_verify_file as string | undefined,
+    );
+
+    const patch: Record<string, unknown> = {};
+    if (files.verify_file) {
+      const uploadedVerify = await this.utilityService.uploadFile(
+        files.verify_file,
+        `company/${companyId}`,
+      );
+      patch.company_verify_file = uploadedVerify.publicUrl;
+      patch.company_verify_file_name = files.verify_file.originalname;
+      patch.company_verify_file_mime_type = uploadedVerify.contentType;
+      patch.company_verify_file_size_bytes = uploadedVerify.size;
+      patch.company_verify_file_bucket = uploadedVerify.bucket;
+      patch.company_verify_file_object_key = uploadedVerify.objectName;
+      patch.company_verify_file_uploaded_at = new Date().toISOString();
+      patch.company_verify_file_metadata = {
+        gs_uri: uploadedVerify.gsUri,
+        signed_url: uploadedVerify.signedUrl ?? null,
+      };
+    }
+
+    if (Object.keys(patch).length === 0) {
+      return current as unknown as Record<string, unknown>;
+    }
+
+    const updated = await this.patchJson<Record<string, unknown>>(
+      `/company/${encodeURIComponent(companyId)}`,
+      patch,
+    );
+
+    // Best-effort cleanup: remove previous object when replaced.
+    if (files.verify_file && previousVerify) {
+      await this.utilityService.deleteObject(previousVerify.objectName, previousVerify.bucket);
+    }
+
+    return updated;
+  }
+
   async updateCompanyAbout(authUserId: string, companyId: string, dto: UpdateCompanyAboutDto) {
     await this.ensureCompanyAccess(authUserId, companyId);
     return this.patchJson<Record<string, unknown>>(`/company/${encodeURIComponent(companyId)}`, {

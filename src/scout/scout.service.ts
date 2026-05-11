@@ -1,9 +1,14 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SearchScoutDto } from './dto/search-scout.dto';
 
 type UpstreamCompanyEmployee = {
   company_id: string;
+};
+
+type UpstreamCompany = {
+  id: string;
+  scout?: unknown;
 };
 
 type UpstreamJobSummary = {
@@ -59,8 +64,86 @@ export class ScoutService {
     return (await res.json()) as T;
   }
 
+  private async patchJson<T>(path: string, body: Record<string, unknown>): Promise<T> {
+    const res = await fetch(`${this.postgresBaseUrl()}${path}`, {
+      method: 'PATCH',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const resBody = await res.text().catch(() => '');
+      throw new Error(`Upstream @jobby-db-postgres failed ${res.status} for ${path}: ${resBody}`);
+    }
+    return (await res.json()) as T;
+  }
+
   private normalizeSkillId(skillId: string): string {
     return skillId.trim().toLowerCase();
+  }
+
+  private normalizeUserId(userId: string): string {
+    return userId.trim();
+  }
+
+  private async resolveAssignedCompanyIds(authUserId: string): Promise<Set<string>> {
+    const rows = await this.fetchJson<UpstreamCompanyEmployee[]>(
+      `/company/employee/${encodeURIComponent(authUserId)}`,
+    );
+    return new Set(
+      rows
+        .map((row) => row.company_id)
+        .filter(
+          (companyId): companyId is string => typeof companyId === 'string' && companyId.length > 0,
+        ),
+    );
+  }
+
+  private async ensureCompanyAccess(authUserId: string, companyId: string): Promise<void> {
+    const assignedCompanyIds = await this.resolveAssignedCompanyIds(authUserId);
+    if (!assignedCompanyIds.has(companyId)) {
+      throw new ForbiddenException('No permission to access this company');
+    }
+  }
+
+  private normalizeFavoriteScoutIds(raw: unknown): string[] {
+    if (!Array.isArray(raw)) {
+      return [];
+    }
+    return Array.from(
+      new Set(
+        raw
+          .map((item) => (typeof item === 'string' || typeof item === 'number' ? String(item) : ''))
+          .map((item) => item.trim())
+          .filter((item) => item.length > 0),
+      ),
+    );
+  }
+
+  private async resolveFavoriteScoutIds(
+    authUserId: string,
+    requestedCompanyId?: string,
+  ): Promise<Set<string>> {
+    const assignedCompanyIds = await this.resolveAssignedCompanyIds(authUserId);
+    if (assignedCompanyIds.size === 0) {
+      return new Set<string>();
+    }
+
+    const normalizedRequestedCompanyId = requestedCompanyId?.trim();
+    const targetCompanyId =
+      normalizedRequestedCompanyId && normalizedRequestedCompanyId.length > 0
+        ? normalizedRequestedCompanyId
+        : assignedCompanyIds.values().next().value;
+
+    if (!targetCompanyId || !assignedCompanyIds.has(targetCompanyId)) {
+      throw new ForbiddenException('No permission to access this company');
+    }
+
+    const company = await this.fetchJson<UpstreamCompany>(
+      `/company/${encodeURIComponent(targetCompanyId)}`,
+    );
+    return new Set(this.normalizeFavoriteScoutIds(company.scout));
   }
 
   private resolveUserDisplayName(user: UpstreamUserSummary): string {
@@ -117,9 +200,10 @@ export class ScoutService {
     const limit = query.limit ?? 10;
     const searchText = (query.search ?? '').trim().toLowerCase();
 
-    const [companySkillSet, userSummaries] = await Promise.all([
+    const [companySkillSet, userSummaries, favoriteScoutIds] = await Promise.all([
       this.resolveCompanyJobSkillSet(authUserId, query.job_name),
       this.fetchJson<UpstreamUserSummary[]>('/user'),
+      this.resolveFavoriteScoutIds(authUserId, query.company_id),
     ]);
 
     const detailedUsers = await Promise.all(
@@ -159,6 +243,7 @@ export class ScoutService {
           logo: user.logo ?? null,
           user_name: this.resolveUserDisplayName(user),
           match_skill: matchSkill,
+          is_star: favoriteScoutIds.has(user.id),
         };
       }),
     );
@@ -175,9 +260,13 @@ export class ScoutService {
         return byName || byEmail;
       });
 
-    filtered.sort(
-      (a, b) => b.match_skill - a.match_skill || a.user_name.localeCompare(b.user_name),
-    );
+    filtered.sort((a, b) => {
+      const byStar = Number(b.is_star) - Number(a.is_star);
+      if (byStar !== 0) return byStar;
+      const byMatchSkill = b.match_skill - a.match_skill;
+      if (byMatchSkill !== 0) return byMatchSkill;
+      return a.user_name.localeCompare(b.user_name);
+    });
 
     const start = page * limit;
     const data = filtered.slice(start, start + limit);
@@ -187,6 +276,46 @@ export class ScoutService {
       page,
       limit,
       total: filtered.length,
+    };
+  }
+
+  async starScout(authUserId: string, companyId: string, userId: string, isStar: boolean) {
+    const normalizedCompanyId = companyId.trim();
+    const normalizedUserId = this.normalizeUserId(userId);
+    if (!normalizedCompanyId) {
+      throw new BadRequestException('companyId must not be empty');
+    }
+    if (!normalizedUserId) {
+      throw new BadRequestException('userId must not be empty');
+    }
+
+    await this.ensureCompanyAccess(authUserId, normalizedCompanyId);
+    const [company, userDetail] = await Promise.all([
+      this.fetchJson<UpstreamCompany>(`/company/${encodeURIComponent(normalizedCompanyId)}`),
+      this.fetchJson<UpstreamUserDetail>(`/user/${encodeURIComponent(normalizedUserId)}`),
+    ]);
+
+    if (userDetail.allow_scout !== true) {
+      throw new BadRequestException('This user does not allow scout');
+    }
+
+    const currentIds = this.normalizeFavoriteScoutIds(company.scout);
+    const nextIds = isStar
+      ? Array.from(new Set([...currentIds, normalizedUserId]))
+      : currentIds.filter((id) => id !== normalizedUserId);
+
+    await this.patchJson<Record<string, unknown>>(
+      `/company/${encodeURIComponent(normalizedCompanyId)}`,
+      {
+        scout: nextIds,
+      },
+    );
+
+    return {
+      company_id: normalizedCompanyId,
+      user_id: normalizedUserId,
+      is_star: nextIds.includes(normalizedUserId),
+      scout: nextIds,
     };
   }
 }

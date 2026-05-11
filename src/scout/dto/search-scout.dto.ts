@@ -3,6 +3,11 @@ import { Type } from 'class-transformer';
 import { IsInt, IsOptional, IsString, Min } from 'class-validator';
 
 export class SearchScoutDto {
+  @ApiPropertyOptional({ description: 'Company id used for favorite-scouter context' })
+  @IsOptional()
+  @IsString()
+  company_id?: string;
+
   @ApiPropertyOptional({ description: 'Search by user name or email' })
   @IsOptional()
   @IsString()

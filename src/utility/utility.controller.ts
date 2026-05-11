@@ -82,6 +82,24 @@ export class UtilityController {
     return this.utilityService.getPhoneRegionRef();
   }
 
+  @Get('option-type')
+  @ApiOperation({ summary: 'Get work types and work options reference', security: [] })
+  @ApiOkResponse({
+    schema: {
+      type: 'object',
+      properties: {
+        work_types: { type: 'array', items: { type: 'object' } },
+        work_options: { type: 'array', items: { type: 'object' } },
+      },
+    },
+  })
+  async getOptionType(): Promise<{
+    work_types: Record<string, unknown>[];
+    work_options: Record<string, unknown>[];
+  }> {
+    return this.utilityService.getOptionTypes();
+  }
+
   @Post('upload/file')
   @UseInterceptors(FileInterceptor('file'))
   @ApiOperation({ summary: 'Upload any file to Google Cloud Storage' })
@@ -124,5 +142,27 @@ export class UtilityController {
     @Body('folder') folder?: string,
   ): Promise<UtilityUploadFileResponse> {
     return this.utilityService.uploadImage(file, folder);
+  }
+
+  @Get('skills/search/:searchName')
+  @ApiOperation({ summary: 'Search skills by name from graph database', security: [] })
+  @ApiParam({ name: 'searchName', description: 'Partial skill name query' })
+  @ApiOkResponse({ schema: { type: 'array', items: { type: 'object' } } })
+  async searchSkills(@Param('searchName') searchName: string): Promise<Record<string, unknown>[]> {
+    return this.utilityService.searchSkillsFromGraph(searchName);
+  }
+
+  @Get('skills/:skillElementId')
+  @ApiOperation({
+    summary: 'Get full skill payload by graph element id',
+    description: 'Neo4j skill fields and related skills (graph).',
+    security: [],
+  })
+  @ApiParam({ name: 'skillElementId', description: 'Neo4j skill elementId' })
+  @ApiOkResponse({ schema: { type: 'object' } })
+  async getSkillDetail(
+    @Param('skillElementId') skillElementId: string,
+  ): Promise<Record<string, unknown>> {
+    return this.utilityService.getSkillDetailFromGraph(skillElementId);
   }
 }

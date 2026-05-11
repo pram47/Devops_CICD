@@ -263,6 +263,8 @@ export class JobService {
       ...(dto.work_type_ids !== undefined && { work_type_ids: dto.work_type_ids }),
       ...(normalized.skillIds !== undefined && { skill_ids: normalized.skillIds }),
       ...(normalized.skillNames !== undefined && { skill_names: normalized.skillNames }),
+      ...(dto.addition_questions !== undefined && { addition_questions: dto.addition_questions }),
+      ...(dto.addition_file !== undefined && { addition_file: dto.addition_file }),
     };
   }
 
@@ -292,6 +294,8 @@ export class JobService {
       ...(dto.work_type_ids !== undefined && { work_type_ids: dto.work_type_ids }),
       ...(normalized.skillIds !== undefined && { skill_ids: normalized.skillIds }),
       ...(normalized.skillNames !== undefined && { skill_names: normalized.skillNames }),
+      ...(dto.addition_questions !== undefined && { addition_questions: dto.addition_questions }),
+      ...(dto.addition_file !== undefined && { addition_file: dto.addition_file }),
     };
   }
 
