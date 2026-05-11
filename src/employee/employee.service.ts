@@ -90,12 +90,34 @@ export class EmployeeService {
   async getEmployees(authUserId: string, query: SearchEmployeeDto) {
     const page = query.page ?? 0;
     const limit = query.limit ?? 10;
-    const rows = await this.fetchJson<UpstreamCompanyEmployee[]>(
+    const membershipRows = await this.fetchJson<UpstreamCompanyEmployee[]>(
       `/company/employee/${encodeURIComponent(authUserId)}`,
+    );
+    const companyIds = [...new Set(membershipRows.map((row) => row.company_id).filter(Boolean))];
+    if (companyIds.length === 0) {
+      return {
+        data: [],
+        page,
+        limit,
+        total: 0,
+      };
+    }
+
+    const employeeGroups = await Promise.all(
+      companyIds.map((companyId) =>
+        this.fetchJson<UpstreamCompanyEmployee[]>(
+          `/company/${encodeURIComponent(companyId)}/employee`,
+        ),
+      ),
+    );
+    const rows = employeeGroups.flat();
+
+    const uniqueRows = rows.filter(
+      (row, index, arr) => arr.findIndex((candidate) => candidate.id === row.id) === index,
     );
     const search = (query.search ?? '').trim().toLowerCase();
 
-    const filtered = rows.filter((row) => {
+    const filtered = uniqueRows.filter((row) => {
       const byRole = query.role_id === undefined || row.role === query.role_id;
       const bySearch =
         !search ||
