@@ -41,6 +41,15 @@ type RequestWithAuthUser = {
 export class CompanyController {
   constructor(private readonly companyService: CompanyService) {}
 
+  @Get('user/:userId/company-id')
+  @UseAuthUserIdSources('param.userId')
+  @ApiOperation({ summary: 'Get company id list by user id from employee memberships' })
+  @ApiParam({ name: 'userId', description: 'User id' })
+  @ApiResponse({ status: 200, description: 'Primary company id and company id list' })
+  getCompanyIdsByUserId(@Param('userId') userId: string) {
+    return this.companyService.getCompanyIdsByUserId(userId);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get company data by id' })
   @ApiParam({ name: 'id', description: 'Company id' })

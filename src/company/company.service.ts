@@ -134,6 +134,19 @@ export class CompanyService {
     return this.fetchJson<Record<string, unknown>>(`/company/${encodeURIComponent(companyId)}`);
   }
 
+  async getCompanyIdsByUserId(userId: string) {
+    const memberships = await this.fetchJson<UpstreamCompanyEmployee[]>(
+      `/company/employee/${encodeURIComponent(userId)}`,
+    );
+    const company_ids = [...new Set(memberships.map((row) => row.company_id).filter(Boolean))];
+
+    return {
+      user_id: userId,
+      company_id: company_ids[0] ?? null,
+      company_ids,
+    };
+  }
+
   async updateCompanyInfo(authUserId: string, companyId: string, dto: UpdateCompanyInfoDto) {
     await this.ensureCompanyAccess(authUserId, companyId);
     return this.patchJson<Record<string, unknown>>(`/company/${encodeURIComponent(companyId)}`, {
