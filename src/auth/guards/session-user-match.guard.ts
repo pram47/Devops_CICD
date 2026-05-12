@@ -19,6 +19,10 @@ type BetterAuthSessionResponse = {
   } | null;
 };
 
+type InternalSessionUserResponse = {
+  userId?: string | null;
+};
+
 type RequestWithAuthUser = {
   headers: Record<string, string | undefined>;
   auth_user_id?: string;
@@ -104,11 +108,21 @@ export class SessionUserMatchGuard implements CanActivate {
     }
 
     const data = (await res.json().catch(() => null)) as BetterAuthSessionResponse | null;
-    if (!data) {
-      return undefined;
+    const userId = data?.user?.id ?? data?.session?.userId;
+    if (userId) {
+      return userId;
     }
 
-    return data.user?.id ?? data.session?.userId;
+    const fallbackRes = await fetch(`${this.authBaseUrl()}/api/internal/session-user`, {
+      headers,
+    });
+    if (!fallbackRes.ok) {
+      return undefined;
+    }
+    const fallbackData = (await fallbackRes.json().catch(() => null)) as
+      | InternalSessionUserResponse
+      | null;
+    return fallbackData?.userId ?? undefined;
   }
 
   private trimString(input: unknown): string | undefined {
