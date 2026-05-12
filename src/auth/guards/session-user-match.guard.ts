@@ -73,6 +73,8 @@ export class SessionUserMatchGuard implements CanActivate {
   private async resolveAuthUserId(
     token: string,
     cookieHeader?: string,
+    originHeader?: string,
+    userAgentHeader?: string,
   ): Promise<string | undefined> {
     const encodedToken = encodeURIComponent(token);
     const synthesizedSessionCookie = `better-auth.session_token=${encodedToken}`;
@@ -86,6 +88,12 @@ export class SessionUserMatchGuard implements CanActivate {
       authorization: `Bearer ${token}`,
       cookie: mergedCookieHeader,
     };
+    if (originHeader) {
+      headers.origin = originHeader;
+    }
+    if (userAgentHeader) {
+      headers['user-agent'] = userAgentHeader;
+    }
 
     const res = await fetch(`${this.authBaseUrl()}/api/auth/get-session`, {
       headers,
@@ -141,6 +149,8 @@ export class SessionUserMatchGuard implements CanActivate {
   private async authorize(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<RequestWithAuthUser>();
     const cookieHeader = this.trimString(request.headers.cookie);
+    const originHeader = this.trimString(request.headers.origin);
+    const userAgentHeader = this.trimString(request.headers['user-agent']);
     const sessionToken = this.extractSessionToken(cookieHeader);
     const bearerToken = this.extractBearerToken(this.trimString(request.headers.authorization));
     const authToken = bearerToken ?? sessionToken;
@@ -149,7 +159,12 @@ export class SessionUserMatchGuard implements CanActivate {
       throw new UnauthorizedException('Missing auth token (cookie session or Bearer token)');
     }
 
-    const authUserId = await this.resolveAuthUserId(authToken, cookieHeader);
+    const authUserId = await this.resolveAuthUserId(
+      authToken,
+      cookieHeader,
+      originHeader,
+      userAgentHeader,
+    );
     if (!authUserId) {
       throw new UnauthorizedException('Session user not found');
     }
