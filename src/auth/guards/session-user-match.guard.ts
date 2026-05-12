@@ -74,12 +74,18 @@ export class SessionUserMatchGuard implements CanActivate {
     token: string,
     cookieHeader?: string,
   ): Promise<string | undefined> {
+    const encodedToken = encodeURIComponent(token);
+    const synthesizedSessionCookie = `better-auth.session_token=${encodedToken}`;
+    const mergedCookieHeader = cookieHeader
+      ? cookieHeader.toLowerCase().includes('better-auth.session_token=')
+        ? cookieHeader
+        : `${cookieHeader}; ${synthesizedSessionCookie}`
+      : synthesizedSessionCookie;
+
     const headers: Record<string, string> = {
       authorization: `Bearer ${token}`,
+      cookie: mergedCookieHeader,
     };
-    if (cookieHeader) {
-      headers.cookie = cookieHeader;
-    }
 
     const res = await fetch(`${this.authBaseUrl()}/api/auth/get-session`, {
       headers,
