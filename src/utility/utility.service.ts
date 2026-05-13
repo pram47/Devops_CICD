@@ -92,11 +92,24 @@ export class UtilityService {
 
   async getSkillDetailFromGraph(skillElementId: string): Promise<Record<string, unknown>> {
     const encodedId = encodeURIComponent(skillElementId ?? '');
-    return this.fetchJsonFrom<Record<string, unknown>>(
-      this.neo4jBaseUrl(),
-      '@jobby-db-neo4j',
-      `/graph/element-id/skills/${encodedId}`,
-    );
+    const neoBaseUrl = this.neo4jBaseUrl();
+    const [skill, relatedSkills] = await Promise.all([
+      this.fetchJsonFrom<Record<string, unknown>>(
+        neoBaseUrl,
+        '@jobby-db-neo4j',
+        `/graph/element-id/skills/${encodedId}`,
+      ),
+      this.fetchJsonFrom<Record<string, unknown>[]>(
+        neoBaseUrl,
+        '@jobby-db-neo4j',
+        `/graph/element-id/skills/${encodedId}/related`,
+      ).catch(() => []),
+    ]);
+
+    return {
+      ...skill,
+      related_skills: relatedSkills ?? [],
+    };
   }
 
   async getProvince(id: number, authorization?: string): Promise<UtilityProvinceResponse> {

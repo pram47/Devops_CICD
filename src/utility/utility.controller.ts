@@ -177,7 +177,14 @@ export class UtilityController {
     security: [],
   })
   @ApiParam({ name: 'skillElementId', description: 'Neo4j skill elementId' })
-  @ApiOkResponse({ schema: { type: 'object' } })
+  @ApiOkResponse({
+    schema: {
+      type: 'object',
+      properties: {
+        related_skills: { type: 'array', items: { type: 'object' } },
+      },
+    },
+  })
   async getSkillDetail(
     @Param('skillElementId') skillElementId: string,
   ): Promise<Record<string, unknown>> {
