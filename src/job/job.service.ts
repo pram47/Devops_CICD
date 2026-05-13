@@ -385,16 +385,39 @@ export class JobService {
     };
   }
 
-  async create(createJobDto: CreateJobDto) {
+  async create(createJobDto: CreateJobDto): Promise<Record<string, unknown>>;
+  async create(companyId: string, createJobDto: CreateJobDto): Promise<Record<string, unknown>>;
+  async create(companyIdOrDto: string | CreateJobDto, createJobDto?: CreateJobDto) {
     const postgresBaseUrl = this.postgresBaseUrl();
     const neo4jBaseUrl = this.neo4jBaseUrl();
 
     try {
-      if (createJobDto.company_id !== undefined) {
-        await this.ensureCompanyExists(createJobDto.company_id);
+      if (
+        typeof companyIdOrDto === 'string' &&
+        createJobDto?.company_id !== undefined &&
+        createJobDto.company_id.trim() !== companyIdOrDto.trim()
+      ) {
+        throw new BadRequestException('company_id in body does not match company_id path param');
       }
 
-      const normalizedAddress = this.normalizeAddressPayload(createJobDto);
+      const payload: CreateJobDto =
+        typeof companyIdOrDto === 'string'
+          ? {
+              ...(createJobDto ?? {}),
+              company_id: companyIdOrDto,
+            }
+          : companyIdOrDto;
+
+      const normalizedCompanyId = payload.company_id?.trim();
+      if (!normalizedCompanyId) {
+        throw new BadRequestException('company_id is required');
+      }
+
+      await this.ensureCompanyExists(normalizedCompanyId);
+
+      payload.company_id = normalizedCompanyId;
+
+      const normalizedAddress = this.normalizeAddressPayload(payload);
       const resolvedPostalCodeId = await this.resolvePostalCodeId(
         normalizedAddress.postalCode,
         normalizedAddress.subDistrictCode,
@@ -403,10 +426,10 @@ export class JobService {
         postgresBaseUrl,
         '@jobby-db-postgres',
         '/job',
-        this.buildPostgresCreatePayload(createJobDto, resolvedPostalCodeId),
+        this.buildPostgresCreatePayload(payload, resolvedPostalCodeId),
       );
 
-      const normalizedSkillPayload = this.normalizeSkillPayload(createJobDto);
+      const normalizedSkillPayload = this.normalizeSkillPayload(payload);
 
       const neoJob = await this.postJson<Neo4jCreateJobResponse>(
         neo4jBaseUrl,
@@ -414,15 +437,15 @@ export class JobService {
         '/graph/element-id/jobs/create',
         {
           id: created.id,
-          name: createJobDto.name ?? created.name ?? undefined,
-          company_id: createJobDto.company_id,
-          created_at: createJobDto.created_at ?? created.created_at ?? undefined,
-          work_type_id: createJobDto.work_type_ids?.[0],
+          name: payload.name ?? created.name ?? undefined,
+          company_id: payload.company_id,
+          created_at: payload.created_at ?? created.created_at ?? undefined,
+          work_type_id: payload.work_type_ids?.[0],
           country_code: normalizedAddress.countryCode,
-          category_id: createJobDto.category_ids?.[0],
+          category_id: payload.category_ids?.[0],
           district_code: normalizedAddress.districtCode,
           province_code: normalizedAddress.provinceCode,
-          work_option_id: createJobDto.work_option_ids?.[0],
+          work_option_id: payload.work_option_ids?.[0],
           ...(normalizedSkillPayload.syncNeo4jSkills && {
             required_skill_element_ids: normalizedSkillPayload.requiredSkillElementIds ?? [],
           }),

@@ -141,18 +141,38 @@ export class UtilityService {
   async getOptionTypes(authorization?: string): Promise<{
     work_types: Record<string, unknown>[];
     work_options: Record<string, unknown>[];
+    work_category: Record<string, unknown>[];
+    apply_status: Record<string, unknown>[];
+    job_status: Record<string, unknown>[];
+    sort_by: { id: number; text_th: string; text_eng: string }[];
   }> {
-    const [workTypes, workOptions] = await Promise.all([
+    const [workTypes, workOptions, workCategory, applyStatus, jobStatus] = await Promise.all([
       this.fetchJson<Record<string, unknown>[]>('/reference/work-types', authorization).catch(
         () => [],
       ),
       this.fetchJson<Record<string, unknown>[]>('/reference/work-options', authorization).catch(
         () => [],
       ),
+      this.fetchJson<Record<string, unknown>[]>('/reference/category', authorization).catch(() => []),
+      this.fetchJson<Record<string, unknown>[]>('/reference/apply-status', authorization).catch(
+        () => [],
+      ),
+      this.fetchJson<Record<string, unknown>[]>('/reference/job-status', authorization).catch(
+        () => [],
+      ),
     ]);
     return {
       work_types: workTypes ?? [],
       work_options: workOptions ?? [],
+      work_category: workCategory ?? [],
+      apply_status: applyStatus ?? [],
+      job_status: jobStatus ?? [],
+      sort_by: [
+        { id: 1, text_th: 'ใหม่สุด', text_eng: 'newest' },
+        { id: 2, text_th: 'เก่าสุด', text_eng: 'oldest' },
+        { id: 3, text_th: 'ตรงทักษะมากสุด', text_eng: 'skill_match' },
+        { id: 4, text_th: 'ผู้สมัครเยอะสุด', text_eng: 'most_applied' },
+      ],
     };
   }
 

@@ -35,12 +35,13 @@ export class JobController {
     return this.jobService.getDetail(id);
   }
 
-  @Post()
+  @Post(':company_id')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create job in Postgres + Neo4j and persist neo eid back to Postgres' })
+  @ApiParam({ name: 'company_id', description: 'Company id (UUID)' })
   @ApiResponse({ status: 201, description: 'Job created successfully with neo4j element id' })
-  create(@Body() createJobDto: CreateJobDto) {
-    return this.jobService.create(createJobDto);
+  create(@Param('company_id') companyId: string, @Body() createJobDto: CreateJobDto) {
+    return this.jobService.create(companyId, createJobDto);
   }
 
   @Patch(':id')

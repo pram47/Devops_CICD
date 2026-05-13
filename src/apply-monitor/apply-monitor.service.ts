@@ -51,6 +51,8 @@ type UpstreamResumeWorkExperience = {
 };
 
 type UpstreamResumeDetail = Record<string, unknown> & {
+  resume_file?: string | null;
+  resume_file_metadata?: Record<string, unknown> | null;
   skills?: unknown[];
   work_experiences?: UpstreamResumeWorkExperience[];
   achievements?: unknown[];
@@ -555,6 +557,9 @@ export class ApplyMonitorService {
       is_star: detail.is_star,
       user: detail.user ?? null,
       job: detail.job ?? null,
+      resume_file: (resumeDetail?.resume_file as string | null | undefined) ?? null,
+      resume_file_metadata:
+        (resumeDetail?.resume_file_metadata as Record<string, unknown> | null | undefined) ?? null,
       resume_detail: resumeDetail,
     };
   }

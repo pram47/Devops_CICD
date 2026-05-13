@@ -90,12 +90,30 @@ export class UtilityController {
       properties: {
         work_types: { type: 'array', items: { type: 'object' } },
         work_options: { type: 'array', items: { type: 'object' } },
+        work_category: { type: 'array', items: { type: 'object' } },
+        apply_status: { type: 'array', items: { type: 'object' } },
+        job_status: { type: 'array', items: { type: 'object' } },
+        sort_by: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number' },
+              text_th: { type: 'string' },
+              text_eng: { type: 'string' },
+            },
+          },
+        },
       },
     },
   })
   async getOptionType(): Promise<{
     work_types: Record<string, unknown>[];
     work_options: Record<string, unknown>[];
+    work_category: Record<string, unknown>[];
+    apply_status: Record<string, unknown>[];
+    job_status: Record<string, unknown>[];
+    sort_by: { id: number; text_th: string; text_eng: string }[];
   }> {
     return this.utilityService.getOptionTypes();
   }
