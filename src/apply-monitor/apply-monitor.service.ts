@@ -42,6 +42,8 @@ type UpstreamApplyDetail = {
     email?: string | null;
     phone?: string | null;
     phone_region?: string | null;
+    resume_file?: string | null;
+    resume_file_metadata?: Record<string, unknown> | null;
   } | null;
 };
 
