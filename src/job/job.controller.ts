@@ -9,12 +9,20 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiOperation,
+  ApiParam,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import {
   SessionUserMatchGuard,
   UseAuthUserIdSources,
 } from '../auth/guards/session-user-match.guard';
 import { CreateJobDto } from './dto/create-job.dto';
+import { UpdateJobStatusDto } from './dto/update-job-status.dto';
 import { UpdateJobDto } from './dto/update-job.dto';
 import { JobService } from './job.service';
 
@@ -54,5 +62,15 @@ export class JobController {
   })
   update(@Param('id') id: string, @Body() updateJobDto: UpdateJobDto) {
     return this.jobService.update(id, updateJobDto);
+  }
+
+  @Patch(':id/status')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update job status by id' })
+  @ApiParam({ name: 'id', description: 'Job id (UUID)' })
+  @ApiBody({ type: UpdateJobStatusDto })
+  @ApiResponse({ status: 200, description: 'Job status updated successfully' })
+  updateStatus(@Param('id') id: string, @Body() body: UpdateJobStatusDto) {
+    return this.jobService.updateStatus(id, body.status);
   }
 }

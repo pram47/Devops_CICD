@@ -543,4 +543,19 @@ export class JobService {
       throw new InternalServerErrorException(`Update job failed: ${message}`);
     }
   }
+
+  async updateStatus(id: string, status: number) {
+    try {
+      const updated = await this.patchJson<Record<string, unknown>>(
+        this.postgresBaseUrl(),
+        '@jobby-db-postgres',
+        `/job/${encodeURIComponent(id)}`,
+        { status },
+      );
+      return this.mapLocationRefsToCodes(updated);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new InternalServerErrorException(`Update job status failed: ${message}`);
+    }
+  }
 }
