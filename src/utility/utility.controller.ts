@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, UploadedFile, UseInterceptors, Res, StreamableFile } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiBearerAuth,
@@ -189,5 +189,68 @@ export class UtilityController {
     @Param('skillElementId') skillElementId: string,
   ): Promise<Record<string, unknown>> {
     return this.utilityService.getSkillDetailFromGraph(skillElementId);
+  }
+
+  @Get('resume/:resumeId/export')
+  @ApiOperation({ summary: 'Export resume (serve uploaded file if available, else generate PDF)', security: [] })
+  @ApiParam({ name: 'resumeId', description: 'Resume id to export' })
+  @ApiOkResponse({
+    description: 'Resume binary stream (original file or generated PDF)',
+    schema: { type: 'string', format: 'binary' },
+  })
+  async exportResume(
+    @Param('resumeId') resumeId: string,
+    @Res({ passthrough: true }) res?: any,
+  ): Promise<StreamableFile> {
+    const resumeServiceUrl = (process.env.JOBBY_RESUME_SERVICE_URL ?? '').replace(/\/+$/, '');
+
+    // fetch resume detail from resume service
+    const detailRes = await fetch(`${resumeServiceUrl}/resume/${encodeURIComponent(resumeId)}`);
+    if (detailRes.ok) {
+      const detail = (await detailRes.json().catch(() => null)) as Record<string, unknown> | null;
+      const resumeFileUrl = typeof detail?.resume_file === 'string' ? detail.resume_file : undefined;
+      const resumeMeta = (detail?.resume_file_metadata as Record<string, unknown> | undefined) ?? undefined;
+      if (resumeFileUrl) {
+        const signed = await this.utilityService.getSignedReadUrlForPathStyleGcsUrl(resumeFileUrl);
+        const fetchUrl = signed ?? resumeFileUrl;
+        try {
+          const upstream = await fetch(fetchUrl);
+          if (upstream.ok) {
+            const arrayBuffer = await upstream.arrayBuffer();
+            const buffer = Buffer.from(arrayBuffer);
+            const contentType =
+              upstream.headers.get('content-type') ?? (resumeMeta?.contentType as string) ?? 'application/octet-stream';
+            const filename =
+              (resumeMeta?.file_name as string) ??
+              (resumeMeta?.fileName as string) ??
+              `resume-${resumeId}.bin`;
+            const disposition = `attachment; filename="${filename}"`;
+            res?.setHeader('Content-Type', contentType);
+            res?.setHeader('Content-Disposition', disposition);
+            return new StreamableFile(buffer);
+          }
+        } catch {
+          // fall through to PDF export
+        }
+      }
+    }
+
+    // fallback: request resume-service to generate PDF
+    const pdfRes = await fetch(`${resumeServiceUrl}/resume/export`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ resume_id: resumeId }),
+    });
+    if (!pdfRes.ok) {
+      const body = await pdfRes.text().catch(() => '');
+      throw new Error(`Upstream resume service failed ${pdfRes.status}: ${body}`);
+    }
+    const arrayBuffer = await pdfRes.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const contentType = pdfRes.headers.get('content-type') ?? 'application/pdf';
+    const disposition = pdfRes.headers.get('content-disposition') ?? 'attachment; filename="resume.pdf"';
+    res?.setHeader('Content-Type', contentType);
+    res?.setHeader('Content-Disposition', disposition);
+    return new StreamableFile(buffer);
   }
 }
