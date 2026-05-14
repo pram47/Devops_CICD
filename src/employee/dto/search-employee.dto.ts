@@ -1,6 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, IsString, Min } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, Min } from 'class-validator';
+import { EMPLOYEE_ROLE_IDS } from '../employee-role.constants';
 
 export class SearchEmployeeDto {
   @ApiPropertyOptional({ description: 'Search employee by email or user id' })
@@ -8,11 +9,15 @@ export class SearchEmployeeDto {
   @IsString()
   search?: string;
 
-  @ApiPropertyOptional({ description: 'Filter by role id', example: 2 })
+  @ApiPropertyOptional({
+    description: 'Filter by role id (1=jobby_user, 2=employer_admin, 3=manager, 4=hr, 5=staff)',
+    example: 2,
+    enum: EMPLOYEE_ROLE_IDS,
+  })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
-  @Min(1)
+  @IsIn(EMPLOYEE_ROLE_IDS)
   role_id?: number;
 
   @ApiPropertyOptional({ default: 0 })

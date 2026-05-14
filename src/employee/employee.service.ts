@@ -1,5 +1,6 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { EMPLOYEE_ROLE_NAME_BY_ID, type EmployeeRoleId } from './employee-role.constants';
 import { AssignUserDto } from './dto/assign-user.dto';
 import { SearchEmployeeDto } from './dto/search-employee.dto';
 
@@ -21,6 +22,7 @@ type UpstreamCompanyEmployee = {
 type EmployeeListRow = UpstreamCompanyEmployee & {
   first_name?: string | null;
   last_name?: string | null;
+  role_name?: string | null;
 };
 
 @Injectable()
@@ -148,10 +150,12 @@ export class EmployeeService {
 
     const enriched: EmployeeListRow[] = filtered.map((row) => {
       const user = row.user_id ? userMap.get(row.user_id) : null;
+      const normalizedRole = Number(row.role) as EmployeeRoleId;
       return {
         ...row,
         first_name: user?.first_name ?? null,
         last_name: user?.last_name ?? null,
+        role_name: EMPLOYEE_ROLE_NAME_BY_ID[normalizedRole] ?? null,
       };
     });
 

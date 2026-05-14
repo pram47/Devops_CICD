@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsEmail, IsInt, IsOptional, IsString, Min } from 'class-validator';
+import { IsEmail, IsIn, IsInt, IsOptional, IsString } from 'class-validator';
+import { EMPLOYEE_ROLE_IDS } from '../employee-role.constants';
 
 export class AssignUserDto {
   @ApiProperty({ description: 'Company id to assign user into' })
@@ -12,13 +13,15 @@ export class AssignUserDto {
   email: string;
 
   @ApiPropertyOptional({
-    description: 'Company role id (default 2)',
+    description:
+      'Company role id (1=jobby_user, 2=employer_admin, 3=manager, 4=hr, 5=staff; default 2)',
     example: 2,
     default: 2,
+    enum: EMPLOYEE_ROLE_IDS,
   })
   @IsOptional()
   @IsInt()
-  @Min(1)
+  @IsIn(EMPLOYEE_ROLE_IDS)
   @Type(() => Number)
   role?: number;
 }
