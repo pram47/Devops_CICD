@@ -6,6 +6,8 @@ import { SearchEmployeeDto } from './dto/search-employee.dto';
 type UpstreamUser = {
   id: string;
   login_option?: number | null;
+  first_name?: string | null;
+  last_name?: string | null;
 };
 
 type UpstreamCompanyEmployee = {
@@ -14,6 +16,11 @@ type UpstreamCompanyEmployee = {
   company_id: string;
   email?: string | null;
   role: number;
+};
+
+type EmployeeListRow = UpstreamCompanyEmployee & {
+  first_name?: string | null;
+  last_name?: string | null;
 };
 
 @Injectable()
@@ -128,14 +135,34 @@ export class EmployeeService {
       return byRole && bySearch;
     });
 
+    const userIds = Array.from(
+      new Set(filtered.map((row) => row.user_id?.trim()).filter((value): value is string => Boolean(value))),
+    );
+    const userEntries = await Promise.all(
+      userIds.map(async (userId) => [
+        userId,
+        await this.fetchJson<UpstreamUser>(`/user/${encodeURIComponent(userId)}`).catch(() => null),
+      ]),
+    );
+    const userMap = new Map<string, UpstreamUser | null>(userEntries as Array<[string, UpstreamUser | null]>);
+
+    const enriched: EmployeeListRow[] = filtered.map((row) => {
+      const user = row.user_id ? userMap.get(row.user_id) : null;
+      return {
+        ...row,
+        first_name: user?.first_name ?? null,
+        last_name: user?.last_name ?? null,
+      };
+    });
+
     const start = page * limit;
-    const data = filtered.slice(start, start + limit);
+    const data = enriched.slice(start, start + limit);
 
     return {
       data,
       page,
       limit,
-      total: filtered.length,
+      total: enriched.length,
     };
   }
 
