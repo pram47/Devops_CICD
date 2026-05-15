@@ -19,6 +19,14 @@ type UpstreamApplyDetail = {
   match_skill: number | null;
   is_viewed: boolean;
   is_star: boolean;
+  cover_letter?: string | null;
+  cover_letter_file_name?: string | null;
+  cover_letter_mime_type?: string | null;
+  cover_letter_size_bytes?: number | null;
+  cover_letter_bucket?: string | null;
+  cover_letter_object_key?: string | null;
+  cover_letter_uploaded_at?: string | null;
+  cover_letter_metadata?: Record<string, unknown> | null;
   user?: {
     first_name?: string | null;
     last_name?: string | null;
@@ -559,6 +567,14 @@ export class ApplyMonitorService {
       is_star: detail.is_star,
       user: detail.user ?? null,
       job: detail.job ?? null,
+      cover_letter: detail.cover_letter ?? null,
+      cover_letter_file_name: detail.cover_letter_file_name ?? null,
+      cover_letter_mime_type: detail.cover_letter_mime_type ?? null,
+      cover_letter_size_bytes: detail.cover_letter_size_bytes ?? null,
+      cover_letter_bucket: detail.cover_letter_bucket ?? null,
+      cover_letter_object_key: detail.cover_letter_object_key ?? null,
+      cover_letter_uploaded_at: detail.cover_letter_uploaded_at ?? null,
+      cover_letter_metadata: detail.cover_letter_metadata ?? null,
       resume_file: (resumeDetail?.resume_file as string | null | undefined) ?? null,
       resume_file_metadata:
         (resumeDetail?.resume_file_metadata as Record<string, unknown> | null | undefined) ?? null,

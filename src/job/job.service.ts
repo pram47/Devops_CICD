@@ -43,6 +43,22 @@ type NormalizedAddressPayload = {
 export class JobService {
   constructor(private readonly config: ConfigService) {}
 
+  private isStartApplyToday(startApply?: string): boolean {
+    if (!startApply) {
+      return false;
+    }
+    const parsed = new Date(startApply);
+    if (Number.isNaN(parsed.getTime())) {
+      return false;
+    }
+    const now = new Date();
+    return (
+      parsed.getFullYear() === now.getFullYear() &&
+      parsed.getMonth() === now.getMonth() &&
+      parsed.getDate() === now.getDate()
+    );
+  }
+
   private postgresBaseUrl(): string {
     const url = this.config.get<string>('JOBBY_DB_POSTGRES_URL');
     if (!url) {
@@ -242,10 +258,11 @@ export class JobService {
   ): Record<string, unknown> {
     const normalized = this.normalizeSkillPayload(dto);
     const normalizedAddress = this.normalizeAddressPayload(dto);
+    const normalizedStatus = this.isStartApplyToday(dto.start_apply) ? 3 : (dto.status ?? 1);
     return {
       ...(dto.id !== undefined && { id: dto.id }),
       ...(dto.eid !== undefined && { eid: dto.eid }),
-      status: dto.status ?? 1,
+      status: normalizedStatus,
       ...(dto.created_at !== undefined && { created_at: dto.created_at }),
       ...(dto.name !== undefined && { name: dto.name }),
       ...(dto.description !== undefined && { description: dto.description }),
@@ -274,9 +291,10 @@ export class JobService {
   ): Record<string, unknown> {
     const normalized = this.normalizeSkillPayload(dto);
     const normalizedAddress = this.normalizeAddressPayload(dto);
+    const normalizedStatus = this.isStartApplyToday(dto.start_apply) ? 3 : dto.status;
     return {
       ...(dto.eid !== undefined && { eid: dto.eid }),
-      ...(dto.status !== undefined && { status: dto.status }),
+      ...(normalizedStatus !== undefined && { status: normalizedStatus }),
       ...(dto.created_at !== undefined && { created_at: dto.created_at }),
       ...(dto.name !== undefined && { name: dto.name }),
       ...(dto.description !== undefined && { description: dto.description }),
