@@ -4,6 +4,7 @@
   "description": "Backend for Frontend - Jobby",
   "private": true,
   "scripts": {
+    "dev": "nest start --watch",
     "build": "nest build",
     "start": "nest start",
     "start:dev": "nest start --watch",
