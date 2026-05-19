@@ -1,0 +1,10 @@
+# Ignore artifacts:
+build
+coverage
+dist
+node_modules
+package.json
+vite.config.ts
+tsconfig.app.json
+tsconfig.json
+tsconfig.node.json
