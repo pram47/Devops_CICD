@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "build:backend": "npm --prefix Back/jobby-employer-bff ci && npm --prefix Back/jobby-employer-bff run build",
+    "build:backend": "npm --prefix Back/jobby-employer-bff install && npm --prefix Back/jobby-employer-bff run build",
     "start:prod": "npm --prefix Back/jobby-employer-bff run start:prod",
     "lint": "eslint .",
     "preview": "vite preview",
