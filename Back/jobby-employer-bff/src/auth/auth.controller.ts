@@ -54,15 +54,15 @@ export class AuthController {
   }
 
   @Post('sign-up/email')
-  signUpEmail(@Body() dto: SignUpEmailDto, @Res({ passthrough: true }) res: Response) {
-    const result = this.authService.signUpEmail(dto);
+  async signUpEmail(@Body() dto: SignUpEmailDto, @Res({ passthrough: true }) res: Response) {
+    const result = await this.authService.signUpEmail(dto);
     this.applySessionCookie(res, result.token);
     return result;
   }
 
   @Post('sign-in/email')
-  signInEmail(@Body() dto: SignInEmailDto, @Res({ passthrough: true }) res: Response) {
-    const result = this.authService.signInEmail(dto);
+  async signInEmail(@Body() dto: SignInEmailDto, @Res({ passthrough: true }) res: Response) {
+    const result = await this.authService.signInEmail(dto);
     this.applySessionCookie(res, result.token);
     return result;
   }
@@ -81,7 +81,7 @@ export class AuthController {
   }
 
   @Get('session')
-  getSession(@Req() req: Request) {
+  async getSession(@Req() req: Request) {
     const token = this.readTokenFromRequest(req);
     if (!token) {
       throw new UnauthorizedException('Missing auth token');
@@ -91,13 +91,13 @@ export class AuthController {
   }
 
   @Get('internal/session-user')
-  getSessionUser(@Req() req: Request) {
+  async getSessionUser(@Req() req: Request) {
     const token = this.readTokenFromRequest(req);
     if (!token) {
       throw new UnauthorizedException('Missing auth token');
     }
 
-    const session = this.authService.resolveSessionFromToken(token);
+    const session = await this.authService.resolveSessionFromToken(token);
     return { userId: session.user.id };
   }
 }
