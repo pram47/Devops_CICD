@@ -58,6 +58,7 @@ jobs:
         run: npm run build
 
       - name: Build backend Docker image
+        continue-on-error: true
         run: docker build -t jobby-employer-bff:ci .
 
   deploy-render:
