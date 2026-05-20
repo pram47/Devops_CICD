@@ -82,4 +82,4 @@ jobs:
           echo "Please add repository secrets:"
           echo "- RENDER_FRONTEND_DEPLOY_HOOK_URL"
           echo "- RENDER_BACKEND_DEPLOY_HOOK_URL"
-          exit 1
+          echo "Skipping deploy trigger step without failing CI/CD workflow."
