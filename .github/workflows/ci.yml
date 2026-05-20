@@ -2,9 +2,9 @@ name: BFF CI
 
 on:
   push:
-    branches: [main, master, dev]
+    branches: [dev]
   pull_request:
-    branches: [main, master, dev]
+    branches: [dev]
 
 env:
   BUN_VERSION: "1"
