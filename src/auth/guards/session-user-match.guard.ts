@@ -9,19 +9,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
-
-type BetterAuthSessionResponse = {
-  user?: {
-    id?: string;
-  } | null;
-  session?: {
-    userId?: string;
-  } | null;
-};
-
-type InternalSessionUserResponse = {
-  userId?: string | null;
-};
+import { verifyAuthToken } from '../token.util';
 
 type RequestWithAuthUser = {
   headers: Record<string, string | undefined>;
@@ -44,10 +32,8 @@ export class SessionUserMatchGuard implements CanActivate {
     private readonly reflector: Reflector,
   ) {}
 
-  private authBaseUrl(): string {
-    const configured = this.config.get<string>('JOBBY_AUTH_SERVICE_URL')?.trim();
-    const fallback = 'http://localhost:4450';
-    return (configured && configured.length > 0 ? configured : fallback).replace(/\/+$/, '');
+  private getSecret(): string {
+    return this.config.get<string>('AUTH_JWT_SECRET')?.trim() || 'dev-jobby-secret-change-me';
   }
 
   private extractSessionToken(cookieHeader?: string): string | null {
@@ -74,55 +60,9 @@ export class SessionUserMatchGuard implements CanActivate {
     return token.length > 0 ? token : null;
   }
 
-  private async resolveAuthUserId(
-    token: string,
-    cookieHeader?: string,
-    originHeader?: string,
-    userAgentHeader?: string,
-  ): Promise<string | undefined> {
-    const encodedToken = encodeURIComponent(token);
-    const synthesizedSessionCookie = `better-auth.session_token=${encodedToken}`;
-    const mergedCookieHeader = cookieHeader
-      ? cookieHeader.toLowerCase().includes('better-auth.session_token=')
-        ? cookieHeader
-        : `${cookieHeader}; ${synthesizedSessionCookie}`
-      : synthesizedSessionCookie;
-
-    const headers: Record<string, string> = {
-      authorization: `Bearer ${token}`,
-      cookie: mergedCookieHeader,
-    };
-    if (originHeader) {
-      headers.origin = originHeader;
-    }
-    if (userAgentHeader) {
-      headers['user-agent'] = userAgentHeader;
-    }
-
-    const res = await fetch(`${this.authBaseUrl()}/api/auth/get-session`, {
-      headers,
-    });
-
-    if (!res.ok) {
-      throw new UnauthorizedException('Invalid session');
-    }
-
-    const data = (await res.json().catch(() => null)) as BetterAuthSessionResponse | null;
-    const userId = data?.user?.id ?? data?.session?.userId;
-    if (userId) {
-      return userId;
-    }
-
-    const fallbackRes = await fetch(`${this.authBaseUrl()}/api/internal/session-user`, {
-      headers,
-    });
-    if (!fallbackRes.ok) {
-      return undefined;
-    }
-    const fallbackData = (await fallbackRes.json().catch(() => null)) as
-      | InternalSessionUserResponse
-      | null;
-    return fallbackData?.userId ?? undefined;
+  private resolveAuthUserId(token: string): string | undefined {
+    const payload = verifyAuthToken(token, this.getSecret());
+    return payload?.sub;
   }
 
   private trimString(input: unknown): string | undefined {
@@ -163,8 +103,6 @@ export class SessionUserMatchGuard implements CanActivate {
   private async authorize(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<RequestWithAuthUser>();
     const cookieHeader = this.trimString(request.headers.cookie);
-    const originHeader = this.trimString(request.headers.origin);
-    const userAgentHeader = this.trimString(request.headers['user-agent']);
     const sessionToken = this.extractSessionToken(cookieHeader);
     const bearerToken = this.extractBearerToken(this.trimString(request.headers.authorization));
     const authToken = bearerToken ?? sessionToken;
@@ -173,12 +111,7 @@ export class SessionUserMatchGuard implements CanActivate {
       throw new UnauthorizedException('Missing auth token (cookie session or Bearer token)');
     }
 
-    const authUserId = await this.resolveAuthUserId(
-      authToken,
-      cookieHeader,
-      originHeader,
-      userAgentHeader,
-    );
+    const authUserId = this.resolveAuthUserId(authToken);
     if (!authUserId) {
       throw new UnauthorizedException('Session user not found');
     }

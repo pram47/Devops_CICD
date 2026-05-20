@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { AuthModule } from './auth/auth.module';
 import { ApplyMonitorModule } from './apply-monitor/apply-monitor.module';
 import { CompanyModule } from './company/company.module';
 import { EmployeeModule } from './employee/employee.module';
@@ -17,6 +18,7 @@ import { UtilityModule } from './utility/utility.module';
       isGlobal: true,
       envFilePath: ['.env.local', '.env'],
     }),
+    AuthModule,
     ApplyMonitorModule,
     CompanyModule,
     EmployeeModule,
