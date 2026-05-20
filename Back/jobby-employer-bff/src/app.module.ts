@@ -11,6 +11,7 @@ import { JobModule } from './job/job.module';
 import { JobMonitorModule } from './job-monitor/job-monitor.module';
 import { ScoutModule } from './scout/scout.module';
 import { UtilityModule } from './utility/utility.module';
+import { PostgresModule } from './database/postgres.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { UtilityModule } from './utility/utility.module';
       isGlobal: true,
       envFilePath: ['.env.local', '.env'],
     }),
+    PostgresModule,
     AuthModule,
     ApplyMonitorModule,
     CompanyModule,

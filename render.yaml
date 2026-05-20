@@ -35,5 +35,7 @@ services:
         value: 4444
       - key: AUTH_JWT_SECRET
         sync: false
+      - key: DATABASE_URL
+        sync: false
       - key: JOBBY_DB_POSTGRES_URL
         sync: false
