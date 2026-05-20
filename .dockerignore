@@ -2,10 +2,13 @@ node_modules
 dist
 .git
 .env*
-*.md
 .prettierrc
 .prettierignore
 .eslintrc*
 *.log
 coverage
 .DS_Store
+.github
+npm-debug.log
+yarn-error.log
+*.local

@@ -1,70 +1,37 @@
-# Jobby Employer BFF
+<div align="center">
+  <img width="500px" src="./.github/JobbyLogo.svg" alt="Jobby logo">
+</div>
 
-Backend for Frontend (BFF) for Jobby Employer — NestJS + Bun + TypeScript.
+Using React + TypeScript + Vite + shadcn/ui
 
-## Stack
+## ⚙️ Setup
 
-- **Runtime:** [Bun](https://bun.sh)
-- **Framework:** [NestJS](https://nestjs.com)
-- **Language:** TypeScript
-- **API docs:** Swagger (OpenAPI)
-- **Formatting:** Prettier
-
-## Setup
+### 📂Install dependencies
 
 ```bash
-cd jobby-employer-bff
-bun install
+bun i
 ```
 
-If `bun install` fails (e.g. with some packages), use `npm install` instead; you can still run the app with `bun run start:dev` or `npm run start:dev`.
-
-## Scripts
-
-
-| Command                | Description                |
-| ---------------------- | -------------------------- |
-| `bun run start`        | Start app                  |
-| `bun run start:dev`    | Start with watch (dev)     |
-| `bun run start:prod`   | Run built app (production) |
-| `bun run build`        | Build for production       |
-| `bun run format`       | Format with Prettier       |
-| `bun run format:check` | Check formatting           |
-
-
-## Swagger
-
-After starting the app:
-
-- **Swagger UI:** [http://localhost:4444/api](http://localhost:4444/api)
-- **API:** [http://localhost:4444](http://localhost:4444)
-
-## Docker
-
-Build:
+### 🛠️ Development
 
 ```bash
-docker build -t jobby-employer-bff .
+bun dev
 ```
 
-Run:
+### 🎯 Before Push
+
+Should Format Code Every Push
 
 ```bash
-docker run -p 4444:4444 jobby-employer-bff
+bunx prettier . --write
 ```
 
-Port is configurable via `PORT` (default `4444`):
+### Docker Run
 
 ```bash
-docker run -p 8080:8080 -e PORT=8080 jobby-employer-bff
+docker build -t jobby-employer .
 ```
 
-## Environment
-
-
-| Variable | Description | Default |
-| -------- | ----------- | ------- |
-| `PORT`   | Server port | `4444`  |
-
-
-Optional: `.env` or `.env.local` in the project root.
+```bash
+docker run -p 8080:88 jobby-employer
+```

@@ -4,3 +4,4 @@ coverage
 *.lock
 .env*
 .git
+build

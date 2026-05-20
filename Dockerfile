@@ -1,5 +1,5 @@
 # Build stage
-FROM oven/bun:1 AS builder
+FROM oven/bun:1-alpine AS builder
 
 WORKDIR /app
 
@@ -7,7 +7,13 @@ WORKDIR /app
 COPY package.json bun.lock* ./
 RUN bun install --frozen-lockfile
 
-COPY . .
+# Copy source and config for the build
+COPY tsconfig*.json vite.config.ts ./
+COPY components.json eslint.config.js index.html ./
+COPY public ./public
+COPY src ./src
+
+# Compile the production bundle
 RUN bun run build
 
 # Production dependencies stage
@@ -22,7 +28,8 @@ RUN bun install --frozen-lockfile --production
 # Runtime stage
 FROM oven/bun:1-slim AS runner
 
-WORKDIR /app
+# Runtime stage
+FROM nginx:1.27-alpine AS runner
 
 ENV NODE_ENV=production
 ENV PORT=4444
